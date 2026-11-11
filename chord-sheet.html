@@ -153,7 +153,14 @@ button{cursor:pointer}
 .staff .tsn{font-family:var(--font-serif);font-weight:700;font-size:17px;text-anchor:middle;fill:var(--ink)}
 .staff .ks{color:var(--ink)}
 .staff g.n{color:var(--ink)}
-.staff g.n.on{color:var(--sel)}
+.staff g.n.on{color:var(--ink)}
+.staff .selhalo{fill:rgba(47,111,222,.10);stroke:var(--sel);stroke-width:1.3}
+/* melody tone colors: chord tone · scale tone · outside the scale */
+:root{--m-ct:#7b4fc4;--m-sc:#2f6fde;--m-out:#9a948b}
+.staff .mct{color:var(--m-ct)}
+.staff .msc{color:var(--m-sc)}
+.staff .mout{color:var(--m-out)}
+.staff g.n.over g{color:var(--accent)}
 .staff g.n.over{color:var(--accent)}
 .staff .ld{stroke:currentColor;stroke-width:1}
 .staff .stem{stroke-width:1.2}
@@ -284,7 +291,7 @@ body.has-kbd.kbd-min{--kb-h:30px}
 .kbd-bar{display:flex;align-items:center;gap:12px;height:30px;font-size:12px;color:var(--chrome-muted);min-width:0}
 .kbd-bar b{color:var(--chrome-text)}
 .kbd-legend i{display:inline-block;width:9px;height:9px;border-radius:2px;margin:0 4px 0 6px;vertical-align:-1px}
-.kbd-legend .lc{background:#c4473a}.kbd-legend .lm{background:#2f6fde}
+.kbd-legend .lc{background:#c4473a}.kbd-legend .lct{background:var(--m-ct)}.kbd-legend .lsc{background:var(--m-sc)}.kbd-legend .lout{background:var(--m-out)}
 .kbd-now{flex:1;min-width:0;font-family:var(--font-serif);font-weight:700;font-size:13px;color:#f3d27a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .kbd-hint{font-size:11px;white-space:nowrap}
 .kbd-tog{background:transparent;border:1px solid #3d3832;color:var(--chrome-text);border-radius:6px;font-size:11px;padding:2px 8px}
@@ -297,8 +304,10 @@ body.has-kbd.kbd-min{--kb-h:30px}
 .wk span{position:absolute;bottom:3px;left:0;right:0;text-align:center;font-size:9px;color:#9a9083;pointer-events:none}
 .bk{position:absolute;top:0;height:60%;z-index:2;background:linear-gradient(#2c2824,#0c0b0a);border-radius:0 0 3px 3px;cursor:pointer}
 .wk.on-chord{background:#f0b2a6}.bk.on-chord{background:#c4473a}
-.wk.on-mel{background:#a8c4ff}.bk.on-mel{background:#2f6fde}
-.wk.on-chord.on-mel{background:#cdb1f0}.bk.on-chord.on-mel{background:#7b4fc4}
+/* melody keys win over chord keys: chord tone · scale tone · outside the scale */
+.wk.on-msc{background:#a8c4ff}.bk.on-msc{background:var(--m-sc)}
+.wk.on-mct{background:#cdb1f0}.bk.on-mct{background:var(--m-ct)}
+.wk.on-mout{background:#d6d2cb}.bk.on-mout{background:#8a847b}
 .wk.on-bass{background:#a9dcb7}.bk.on-bass{background:#2f8a50}
 .kbd-legend .lb{background:#2f8a50}
 .wk:active{background:#e3dccf}.bk:active{background:#3a352f}
@@ -707,7 +716,7 @@ body.view-home{--kb-h:0px}
   <button data-p="close" class="txt" title="끝내기 (Esc)">✕</button>
 </div>
 <div class="kbd" id="kbd">
-  <div class="kbd-bar"><b>건반</b><span class="kbd-legend"><i class="lc"></i>코드<i class="lm"></i>멜로디<i class="lb"></i>베이스</span><span class="kbd-now" id="kbdNow"></span><span class="kbd-hint">클릭하면 소리 · 멜로디 편집 중엔 음표 입력 (Shift: 화음)</span><button class="kbd-tog" id="kbdTog">접기 ▾</button></div>
+  <div class="kbd-bar"><b>건반</b><span class="kbd-legend"><i class="lc"></i>코드<i class="lb"></i>베이스 <span class="kl-sep">· 멜로디</span><i class="lct"></i>코드톤<i class="lsc"></i>스케일<i class="lout"></i>스케일 밖</span><span class="kbd-now" id="kbdNow"></span><span class="kbd-hint">클릭하면 소리 · 멜로디 편집 중엔 음표 입력 (Shift: 화음)</span><button class="kbd-tog" id="kbdTog">접기 ▾</button></div>
   <div class="keys" id="keys"></div>
 </div>
 <div class="toast" id="toast"></div>
@@ -1119,6 +1128,7 @@ const SEC_HTML=`
 function renderSections(){
   commitEdit();
   if(prefs.annot) ANN=analyzeSong(song);
+  MEL_SCALE=melScale(song);
   song.sections.forEach(syncNotes);
   if(mel){ if(mel.fi>=flatCount()) mel=null; else mel.idx=Math.min(mel.idx,notesOf(mel.fi).length-1); }
   const wrap=$('#sections'); wrap.innerHTML='';
@@ -1356,11 +1366,12 @@ function drawStaff(cell){
   let t=0;
   const items=notes.map((n,i)=>{ const len=L48(n), it={n,i,t,len,x:xAt(t),over:t+len>cap}; t+=len; return it; });
   const used=t, selIdx=mel&&mel.fi===fi?mel.idx:null;
-  const shown={};
+  const shown={}, colorOn=prefs.melColor!==false;
   items.forEach(it=>{
     const n=it.n; if(n.r) return;
-    const ps=pitchesOf(n).filter((q,k,a)=>k===0||q.s!==a[k-1].s);
-    it.ps=ps.map(q=>{ const def=(q.s in shown)?shown[q.s]:ks.alters[((q.s%7)+7)%7], acc=q.a!==def?q.a:null; shown[q.s]=q.a; return {s:q.s,a:q.a,acc,y:yOf(q.s),dx:0}; });
+    const ps=pitchesOf(n).filter((q,k,a)=>k===0||q.s!==a[k-1].s), ch=colorOn?chordAtNote(fi,it.t,cap):null;
+    it.ps=ps.map(q=>{ const def=(q.s in shown)?shown[q.s]:ks.alters[((q.s%7)+7)%7], acc=q.a!==def?q.a:null; shown[q.s]=q.a;
+      return {s:q.s,a:q.a,acc,y:yOf(q.s),dx:0,cls:colorOn?melClass(((midiOf(q)%12)+12)%12,ch):''}; });
     const lo=ps[0].s, hi=ps[ps.length-1].s;
     it.up=(hi-34)<(34-lo); it.yTop=yOf(hi); it.yBot=yOf(lo); it.mid=(lo+hi)/2;
   });
@@ -1386,10 +1397,11 @@ function drawStaff(cell){
       const up=it.up, ord=up?it.ps:[...it.ps].reverse();
       for(let k=1;k<ord.length;k++) if(Math.abs(ord[k].s-ord[k-1].s)===1&&!ord[k-1].dx) ord[k].dx=up?9:-9;   // seconds sit side by side
       s+=ledgerSVG(it.x,it.ps[0].s)+ledgerSVG(it.x,it.ps[it.ps.length-1].s);
-      it.ps.filter(q=>q.acc!=null).reverse().forEach((q,k)=>{ s+=accSVG(q.acc,it.x-12-(k%2)*8-(q.dx<0?9:0),q.y); });
+      it.ps.filter(q=>q.acc!=null).reverse().forEach((q,k)=>{ s+=`<g class="${q.cls}">${accSVG(q.acc,it.x-12-(k%2)*8-(q.dx<0?9:0),q.y)}</g>`; });
       it.ps.forEach(q=>{
-        s+=headSVG(it.x+q.dx,q.y,n.d);
+        s+=`<g class="${q.cls}">${headSVG(it.x+q.dx,q.y,n.d)}`;
         if(isDotted(n.d)) s+=`<circle cx="${it.x+8.5+Math.max(0,q.dx)}" cy="${q.s%2===0?q.y-3.6:q.y}" r="1.6" fill="currentColor"/>`;
+        s+='</g>';
       });
       const b=BASE_OF[n.d];
       if(b<16){
@@ -1398,6 +1410,10 @@ function drawStaff(cell){
         if(!it.grp&&b<=2) s+=flagSVG(sx,ey,up,b===2?1:2);
         it.sx=sx; it.ey=ey;
       } else it.ey=up?it.yTop-12:it.yBot+12;
+    }
+    if(it.i===selIdx){   // selection = soft halo, so the note keeps its tone color
+      const top=n.r?Y0+2:Math.min(it.yTop,it.ey??it.yTop)-6, bot=n.r?Y0+4*G-2:Math.max(it.yBot,it.ey??it.yBot)+6;
+      o.push(`<rect class="selhalo" x="${it.x-11}" y="${top}" width="22" height="${bot-top}" rx="6"/>`);
     }
     o.push(`<g class="n${it.i===selIdx?' on':''}${it.over?' over':''}" data-i="${it.i}">${s}</g>`);
   });
@@ -1488,10 +1504,13 @@ function updatePalette(){
 async function previewNote(n){
   if(!n||n.r||Player.playing) return;
   const ms=pitchesOf(n).map(midiOf), inst=prefs.melInst;
+  // which chord is under this note (for the keyboard color)
+  let ch=null;
+  for(let fi=0,N=flatCount();fi<N&&!ch;fi++){ const ns=notesOf(fi), i=ns.indexOf(n); if(i>=0){ ch=chordAtNote(fi,sum48(ns.slice(0,i)),capAt(fi)*3); break; } }
   Engine.init(); try{ await Engine.ctx.resume(); }catch(e){}
   await Engine.prepare(inst,ms);
   const at=Engine.ctx.currentTime+0.01;
-  ms.forEach(m=>Engine.note(inst,m,at,0.5,0.75/Math.sqrt(ms.length),'mel'));
+  ms.forEach(m=>Engine.note(inst,m,at,0.5,0.75/Math.sqrt(ms.length),melClass(((m%12)+12)%12,ch)));
 }
 function insertNote(n){
   if(!mel) return;
@@ -1619,7 +1638,12 @@ function staffMouseDown(e,svg){
   e.preventDefault(); hideCtx(); blurActive(); commitEdit();
   const cell=svg.closest('.bar'), fi=+cell.dataset.fi, pt=staffPoint(svg,e), notes=notesOf(fi);
   const near=nearNote(cell,pt.x), lay=cell._lay;
-  if(!editMode){ if(near) previewNote(notes[near.i]); else needEdit(); return; }   // locked: listen only
+  if(!editMode){   // locked: the staff selects bars like the chord row (drag → right-click search), and a note click plays it
+    if(e.shiftKey&&sel) sel.f=fi; else sel={a:fi,f:fi};
+    dragging=true; paintSel(); focusProxy();
+    if(near) previewNote(notes[near.i]);
+    return;
+  }
   if(near){
     const n=notes[near.i];
     if(e.shiftKey&&!n.r){ if(!(mel&&mel.fi===fi&&mel.idx===near.i)) setMel(fi,near.i,{scroll:false}); toggleTone(pt.s); return; }
@@ -1885,7 +1909,7 @@ const Engine={
   },
   fire(e,at,inst){
     if(e.click){ if(prefs.metro) this.click(at,e.accent); return; }
-    if(e.mel){ if(prefs.playMelody) this.note(prefs.melInst,e.midi,at,Math.max(0.06,e.d-0.02),e.vel,'mel'); return; }
+    if(e.mel){ if(prefs.playMelody) this.note(prefs.melInst,e.midi,at,Math.max(0.06,e.d-0.02),e.vel,e.cls||'msc'); return; }
     if(e.drum){ if(prefs.drums) Drum.hit(e.drum,at,e.vel); return; }
     if(e.bass){ if(prefs.bass) this.note(e.inst,e.midi,at,e.d,e.vel*prefs.bassVol,'bass'); return; }
     if(prefs.playChords) this.chord(inst,e.notes,at,e);
@@ -1995,6 +2019,9 @@ function buildTimeline(a,b){
     });
     t+=dur;
   }
+  // tag each melody note: chord tone / scale tone / outside (drives the keyboard colors)
+  const scale=melScale(song);
+  melEv.forEach(ev=>{ const sg=chordAt(segs,ev.t+1e-6); ev.cls=melClass(((ev.midi%12)+12)%12,sg?sg.chord:null,scale); });
   return {bars,segs,mel:melEv,total:t};
 }
 function buildEvents(tl,inst,pattern){
@@ -2016,7 +2043,7 @@ function buildEvents(tl,inst,pattern){
       ev.push({t:a.t,d:kind==='piano'&&pattern!=='hold'?d*0.92:d,notes:ns,withBass,dir:kind==='guitar'?(a.off?'up':'down'):null,vel});
     });
   });
-  tl.mel.forEach(m=>ev.push({t:m.t,d:m.d,mel:true,midi:m.midi,vel:0.85,noWarp:m.noWarp}));
+  tl.mel.forEach(m=>ev.push({t:m.t,d:m.d,mel:true,midi:m.midi,vel:0.85,noWarp:m.noWarp,cls:m.cls}));
   if(prefs.drums) ev.push(...buildDrums(tl));
   if(prefs.bass) ev.push(...buildBass(tl));
   // swing feel: push off-beat 8ths late (triplet notes keep their own time)
@@ -2432,6 +2459,33 @@ const BORROW_MODES=key=>key.minor
   :[['에올리안(단조)',NMIN_IV],['도리안',[0,2,3,5,7,9,10]],['믹솔리디안',[0,2,4,5,7,9,10]],['프리지안',[0,1,3,5,7,8,10]],['리디안',[0,2,4,6,7,9,11]],['하모닉 마이너',HMIN_IV]];
 const coreOf=c=>[...new Set([...c.iv.filter(i=>i<12).map(i=>(c.root+i)%12),...(c.bass!=null?[c.bass]:[])])];
 const allIn=(arr,set)=>arr.every(x=>set.has(x));
+/* ---------- melody colors: chord tone (purple) · in the song's scale (blue) · outside it (gray) ---------- */
+let MEL_SCALE=null;                       // pitch classes of the song's scale (minor: natural minor + leading tone)
+function melScale(s){
+  const kf=keyFor(s); if(!kf) return null;
+  const k=kf.k;
+  return k.minor?new Set([...pcset(k.tonic,NMIN_IV),(k.tonic+11)%12]):pcset(k.tonic,MAJ_IV);
+}
+const chordPcsAll=c=>new Set([...c.iv.map(i=>(c.root+i)%12),...(c.bass!=null?[c.bass]:[])]);
+function melClass(pc,chord,scale=MEL_SCALE){
+  if(chord&&chordPcsAll(chord).has(pc)) return 'mct';
+  return !scale||scale.has(pc)?'msc':'mout';
+}
+/* chord sounding in each slot of a bar (resolves %, "/" and chords carried over from the previous bar) */
+function barSlots(fi,depth=0){
+  const p=locate(fi); if(!p) return [];
+  const toks=splitBar(song.sections[p.si].bars[p.bi]);
+  const back=()=>fi>0&&depth<8?barSlots(fi-1,depth+1):[];
+  if(toks.length===1&&toks[0]==='%') return back();
+  let prev;
+  return toks.map(t=>{
+    const k=tokKind(t);
+    if(k==='chord') return prev=parseChord(t);
+    if(k==='cont'){ if(prev===undefined){ const b=back(); prev=b[b.length-1]||null; } return prev; }
+    return prev=null;
+  });
+}
+function chordAtNote(fi,t48,cap48){ const sl=barSlots(fi); return sl.length?sl[Math.min(sl.length-1,Math.floor(t48/cap48*sl.length+1e-9))]:null; }
 function isDiatonic(c,key){
   const core=coreOf(c);
   if(!key.minor) return allIn(core,pcset(key.tonic,MAJ_IV));
@@ -2983,14 +3037,14 @@ const KB={
   },
   clear(){
     this.timers.forEach(clearTimeout); this.timers.clear(); this.cnt={};
-    Object.values(this.keys).forEach(k=>k.classList.remove('on-chord','on-mel','on-bass')); this.label();
+    Object.values(this.keys).forEach(k=>k.classList.remove('on-chord','on-bass','on-mct','on-msc','on-mout')); this.label();
   }
 };
 async function keyPress(m,shift){
   if(mel){ shift?addToneMidi(m):insertMidi(m); return; }
   Engine.init(); try{ await Engine.ctx.resume(); }catch(e){}
   await Engine.prepare(prefs.melInst,[m]);
-  Engine.note(prefs.melInst,m,Engine.ctx.currentTime+0.01,0.6,0.8,'mel');
+  Engine.note(prefs.melInst,m,Engine.ctx.currentTime+0.01,0.6,0.8,melClass(((m%12)+12)%12,null));
 }
 function applyKbd(){
   document.body.classList.add('has-kbd');
