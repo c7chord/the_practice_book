@@ -414,6 +414,22 @@ body.edit-on .paper{box-shadow:0 0 0 2px var(--accent),0 14px 40px rgba(40,30,10
 .yt-item b{display:block;font-size:12px;line-height:1.3;max-height:3.9em;overflow:hidden}
 .yt-item small{font-size:11px;color:var(--muted)}
 
+/* ---------- accounts ---------- */
+body:not(.signed-in) .only-in{display:none!important}
+body.signed-in .only-out{display:none!important}
+.h-user{display:inline-flex;align-items:center;gap:8px;margin-right:4px}
+.h-user:empty{display:none}
+.h-user .who{font-weight:700;font-size:13px;padding:4px 10px;border-radius:999px;background:#f1ebdf}
+.h-user .who::before{content:'♪ ';color:var(--accent)}
+.lg-reason{margin:0 0 10px;padding:8px 10px;border-radius:8px;background:var(--accent-soft);color:var(--accent);font-size:13px}
+.lg-tabs{display:flex;gap:6px;margin-bottom:12px}
+.lg-form{display:grid;gap:10px;max-width:360px}
+.lg-form label{display:grid;gap:4px;font-size:12px;font-weight:700;color:var(--ink-2)}
+.lg-form .field{font-size:15px;padding:8px 10px}
+.lg-go{justify-self:start;padding:9px 18px}
+.lg-err{margin:0;color:var(--accent);font-size:13px}
+.lg-note{margin:0;font-size:12px;color:var(--muted);line-height:1.5}
+
 /* ---------- home (Practice Book) ---------- */
 body.view-home .toolbar,body.view-home .paper,body.view-home .kbd,body.view-home .palette,body.view-home .groove{display:none!important}
 body:not(.view-home) .home{display:none}
@@ -503,14 +519,17 @@ body.view-home{--kb-h:0px}
       <p class="home-sub">곡을 듣고, 코드와 멜로디를 적고, 분석하는 연습장 · <span id="hStats"></span></p>
     </div>
     <div class="home-actions">
-      <button class="btn" id="hImport">파일 불러오기</button>
-      <button class="btn" id="hBackup">전체 백업</button>
-      <button class="btn primary" id="hNew">+ 새 시트</button>
+      <span class="h-user" id="hUser"></span>
+      <button class="btn only-out" id="hLogin">로그인</button>
+      <button class="btn primary only-out" id="hSignup">회원가입</button>
+      <button class="btn only-in" id="hImport">파일 불러오기</button>
+      <button class="btn only-in" id="hBackup">전체 백업</button>
+      <button class="btn primary only-in" id="hNew">+ 새 시트</button>
     </div>
   </div>
-  <h2>최근에 만든 시트</h2>
+  <h2 id="hRecentTitle">최근에 만든 시트</h2>
   <div class="recent" id="hRecent"></div>
-  <div class="list-head">
+  <div class="list-head only-in">
     <h2>시트 목록 <small id="hCount"></small></h2>
     <input type="search" class="field" id="hQ" name="sheetSearch" aria-label="시트 검색" placeholder="제목 · 아티스트 · 코드 검색">
     <select class="field" id="hSort" name="sheetSort" aria-label="정렬">
@@ -520,7 +539,7 @@ body.view-home{--kb-h:0px}
       <option value="artist">아티스트순</option>
     </select>
   </div>
-  <div class="slist" id="hList"></div>
+  <div class="slist only-in" id="hList"></div>
 </div>
 
 <header class="toolbar">
@@ -951,6 +970,7 @@ function exampleSongs(){
       [[N(a4,0,4),N(a4,0,4)],q8(a4,d4,f4,a4),[N(g4,0,4),N(g4,0,4)],q8(g4,c4,e4,g4),[N(a4,0,4),N(a4,0,4)],q8(a4,b4,c5,d5),...end],
       '전원 합창(콜 앤 리스폰스)','더 크게, 템포 유지','“Way hay and up she rises” — 도리안 B♮가 밝은 색을 줘요')
   ]);
+  saints.id='ex-saints'; green.id='ex-greensleeves'; sailor.id='ex-sailor';   // stable ids so example links keep working
   return [saints,green,sailor];
 }
 function normalizeSong(o){
@@ -979,13 +999,15 @@ function normalizeSong(o){
 /* =========================================================
    storage
    ========================================================= */
-const LS={lib:'chordsheet.library.v1',draft:'chordsheet.draft.v1',prefs:'chordsheet.prefs.v1',seeded:'chordsheet.seeded.v1',seeded2:'chordsheet.seeded.v2'};
+const LS={lib:'chordsheet.library.v1',draft:'chordsheet.draft.v1',prefs:'chordsheet.prefs.v1',session:'chordsheet.session.v1',migrated:'chordsheet.migrated.v1'};
 const store={
   get(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch(e){return def;}},
   set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}
 };
-const readLib=()=>store.get(LS.lib,{})||{};
-function writeLib(lib){ if(!store.set(LS.lib,lib)){ toast('저장 공간에 쓰지 못했어요. "파일로 내보내기"로 백업하세요.'); return false;} return true; }
+/* the library lives in memory: logged out → the 3 examples (read-only), logged in → the account's sheets, synced to Supabase */
+let LIB={}, SAVED={};                 // SAVED: id → JSON last confirmed on the server
+const readLib=()=>LIB;
+function writeLib(lib){ LIB=lib; if(Auth.user) Cloud.sync(); return true; }
 
 let prefs=Object.assign({inst:'piano',pattern:'hold',metro:false,countin:false,vol:0.8,showRoman:true,annot:false,loop:false,
   staff:true,playChords:true,playMelody:true,melInst:'voice',
@@ -1020,8 +1042,13 @@ function saveNow(){
 function markDirty(){ dirty=true; song.updatedAt=Date.now(); updateDirtyUI(); clearTimeout(draftTimer); draftTimer=setTimeout(saveNow,600); queueAnalysis(); }
 function updateDirtyUI(){
   const b=$('#btnSave');
-  b.classList.toggle('dirty',dirty); b.textContent=dirty?'저장 중…':'저장됨 ✓';
-  b.title=dirty?'곧 자동 저장돼요 (⌘/Ctrl+S: 지금 저장)':'Practice Book에 자동 저장됨';
+  if(!Auth.user){ b.classList.remove('dirty'); b.textContent='로그인하면 저장돼요'; b.title='로그인하면 내 시트를 만들고 저장할 수 있어요'; }
+  else{
+    const pend=dirty||Cloud.busy;
+    b.classList.toggle('dirty',pend||Cloud.error);
+    b.textContent=Cloud.error?'저장 실패 · 재시도 중':pend?'저장 중…':'저장됨 ✓';
+    b.title=Cloud.error?'서버에 저장하지 못했어요 — 잠시 후 다시 시도해요':pend?'곧 자동 저장돼요 (⌘/Ctrl+S: 지금 저장)':`${Auth.user.name} 계정에 저장됨`;
+  }
   if(view==='editor') document.title=(song.title||'제목 없음')+' · Practice Book';
 }
 
@@ -1216,6 +1243,7 @@ function openYouTube(u){
 let editMode=false;
 function needEdit(){
   if(editMode) return true;
+  if(!Auth.user){ openLogin('편집하고 저장하려면 로그인하세요'); return false; }
   toast('✎ 수정 버튼을 누르면 편집할 수 있어요');
   const b=$('#btnEdit'); b.classList.remove('nudge'); void b.offsetWidth; b.classList.add('nudge');
   return false;
@@ -2993,6 +3021,7 @@ function setStatus(s){ $('#status').textContent=s||''; }
    ========================================================= */
 function saveToLib(asCopy){
   commitEdit();
+  if(!Auth.user) return openLogin(asCopy?'내 시트로 복제하려면 로그인하세요':'저장하려면 로그인하세요');
   if(asCopy){
     saveNow();
     const c=clone(song); c.id=uid(); c.title=(c.title||'제목 없음')+' (사본)'; c.createdAt=c.updatedAt=Date.now();
@@ -3013,6 +3042,7 @@ function download(name,obj){
   document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href),1000);
 }
 function importFile(file){
+  if(!Auth.user) return openLogin('불러온 시트를 저장하려면 로그인하세요');
   const fr=new FileReader();
   fr.onload=()=>{
     let data; try{ data=JSON.parse(fr.result); }catch(e){ return toast('JSON 파일을 읽지 못했어요'); }
@@ -3032,6 +3062,151 @@ function importFile(file){
 }
 
 /* =========================================================
+   accounts — ID + password login (Supabase Auth), sheets per account (Supabase table "sheets", row-level security)
+   ========================================================= */
+// Project URL + publishable key — public by design; each user's rows are protected by row-level security
+const SUPA={url:'https://aasvxnmncwgxvzxqtuly.supabase.co',key:'sb_publishable_sT8t1BkA0LA3l9dfj92VMw_dhd4Hz0C'};
+// IDs map to placeholder e-mails on the owner's own GitHub Pages host (no mailbox exists there); "Confirm email" is off, so nothing is sent
+const AUTH_DOMAIN='c7chord.github.io';
+const ID_RE=/^[a-z0-9_.-]{3,20}$/;
+const Auth={
+  user:null,session:null,
+  ready:()=>!!(SUPA.url&&SUPA.key),
+  email:id=>`${id.toLowerCase()}@${AUTH_DOMAIN}`,
+  async req(path,body,token){
+    const r=await fetch(SUPA.url+path,{method:'POST',headers:{apikey:SUPA.key,'Content-Type':'application/json',...(token?{Authorization:'Bearer '+token}:{})},body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw Object.assign(new Error(d.msg||d.error_description||d.message||('HTTP '+r.status)),{code:d.error_code||d.code||d.error,status:r.status});
+    return d;
+  },
+  set(d){
+    this.session={access_token:d.access_token,refresh_token:d.refresh_token,expires_at:d.expires_at||Math.floor(Date.now()/1000)+(d.expires_in||3600),user:d.user};
+    const u=d.user||{}; this.user={id:u.id,name:(u.user_metadata&&u.user_metadata.username)||(u.email||'').split('@')[0]};
+    store.set(LS.session,this.session);
+  },
+  clear(){ this.session=null; this.user=null; try{ localStorage.removeItem(LS.session); }catch(e){} },
+  async signUp(id,pw){
+    const d=await this.req('/auth/v1/signup',{email:this.email(id),password:pw,data:{username:id}});
+    if(!d.access_token) throw Object.assign(new Error('confirm'),{code:'email_confirm_on'});
+    this.set(d);
+  },
+  async signIn(id,pw){ this.set(await this.req('/auth/v1/token?grant_type=password',{email:this.email(id),password:pw})); },
+  async token(){
+    if(!this.session) return null;
+    if(this.session.expires_at-60<Date.now()/1000) this.set(await this.req('/auth/v1/token?grant_type=refresh_token',{refresh_token:this.session.refresh_token}));
+    return this.session.access_token;
+  },
+  async signOut(){
+    const t=this.session&&this.session.access_token;
+    this.clear();
+    if(t) fetch(SUPA.url+'/auth/v1/logout',{method:'POST',headers:{apikey:SUPA.key,Authorization:'Bearer '+t}}).catch(()=>{});
+  }
+};
+const Cloud={
+  busy:false,error:false,timer:0,chain:Promise.resolve(),
+  async api(method,path,body,extra={}){
+    const t=await Auth.token();
+    const r=await fetch(SUPA.url+'/rest/v1/'+path,{method,keepalive:method!=='GET',headers:{apikey:SUPA.key,Authorization:'Bearer '+t,'Content-Type':'application/json',...extra},body:body?JSON.stringify(body):undefined});
+    if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.message||('HTTP '+r.status)); }
+    return r.json().catch(()=>null);
+  },
+  async load(){
+    const rows=await this.api('GET','sheets?select=id,data');
+    LIB={}; SAVED={};
+    (rows||[]).forEach(r=>{ LIB[r.id]=r.data; SAVED[r.id]=JSON.stringify(r.data); });
+  },
+  sync(){ this.chain=this.chain.then(()=>this.run()).catch(()=>{}); return this.chain; },
+  async run(){
+    if(!Auth.user) return;
+    const up=[], del=[];
+    for(const id in LIB){ const j=JSON.stringify(LIB[id]); if(SAVED[id]!==j) up.push({id,data:JSON.parse(j),j}); }
+    for(const id in SAVED) if(!(id in LIB)) del.push(id);
+    if(!up.length&&!del.length) return;
+    this.busy=true; updateDirtyUI();
+    try{
+      if(up.length){
+        await this.api('POST','sheets?on_conflict=user_id,id',up.map(u=>({id:u.id,data:u.data,updated_at:new Date().toISOString()})),{Prefer:'resolution=merge-duplicates,return=minimal'});
+        up.forEach(u=>{ SAVED[u.id]=u.j; });
+      }
+      for(const id of del){ await this.api('DELETE','sheets?id=eq.'+encodeURIComponent(id),null,{Prefer:'return=minimal'}); delete SAVED[id]; }
+      this.error=false;
+    }catch(e){
+      this.error=true; console.info('동기화 실패 — 10초 뒤 다시 시도해요:',e.message);
+      clearTimeout(this.timer); this.timer=setTimeout(()=>this.sync(),10000);
+    }
+    this.busy=false; updateDirtyUI();
+  }
+};
+const examplesLib=()=>Object.fromEntries(exampleSongs().map((s,i)=>{ s.createdAt=s.updatedAt=Date.now()-i*60000; return [s.id,s]; }));
+function useExamples(){ LIB=examplesLib(); SAVED={}; }
+async function afterLogin(isNew){
+  if(isNew){ LIB={}; exampleSongs().forEach((s,i)=>{ s.id=uid(); s.createdAt=s.updatedAt=Date.now()-i*60000; LIB[s.id]=s; }); SAVED={}; }
+  else await Cloud.load();
+  // sheets saved in this browser before accounts existed → offer to move them into the account (once)
+  const local=store.get(LS.lib,null);
+  if(local&&!store.get(LS.migrated,false)){
+    const ex=['When the Saints Go Marching In','Greensleeves','Drunken Sailor','Misty','사용법 예시','예시 시트'];
+    const mine=Object.values(local).filter(s=>s&&!ex.includes(s.title)&&(s.sections||[]).some(x=>(x.bars||[]).some(b=>String(b).trim())));
+    if(mine.length&&confirm(`이 브라우저에 저장돼 있던 시트 ${mine.length}개를 ${Auth.user.name} 계정으로 옮길까요?`)){
+      mine.forEach(s=>{ const n=normalizeSong(s); LIB[n.id]=n; });
+      store.set(LS.migrated,true);
+    } else if(mine.length) store.set(LS.migrated,true);
+  }
+  Cloud.sync();
+}
+function openLogin(reason='',mode='login'){
+  const body=document.createElement('div');
+  const draw=()=>{
+    const su=mode==='signup';
+    body.innerHTML=`
+      ${reason?`<p class="lg-reason">${esc(reason)}</p>`:''}
+      <div class="lg-tabs"><button type="button" class="chip${su?'':' on'}" data-mode="login">로그인</button><button type="button" class="chip${su?' on':''}" data-mode="signup">회원가입</button></div>
+      <form class="lg-form" autocomplete="on">
+        <label>아이디<input class="field" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required placeholder="영문 소문자·숫자 3–20자"></label>
+        <label>비밀번호<input class="field" type="password" name="password" autocomplete="${su?'new-password':'current-password'}" required placeholder="6자 이상"></label>
+        ${su?'<label>비밀번호 확인<input class="field" type="password" name="password2" autocomplete="new-password" required></label>':''}
+        <p class="lg-err" hidden></p>
+        <button class="btn primary lg-go">${su?'가입하고 시작하기':'로그인'}</button>
+        <p class="lg-note">${su?'이메일 없이 아이디로만 가입해요. 아이디·비밀번호를 잊으면 찾을 수 없으니 꼭 기억해 두세요. 가입하면 예시 3곡이 내 시트로 복사돼요.':'로그인하면 어느 기기에서든 내 시트를 이어서 쓸 수 있어요.'}</p>
+      </form>`;
+    $('input',body).focus();
+  };
+  draw();
+  body.addEventListener('click',e=>{ const t=e.target.closest('[data-mode]'); if(t){ mode=t.dataset.mode; draw(); } });
+  body.addEventListener('submit',async e=>{
+    e.preventDefault();
+    const f=e.target, id=f.username.value.trim().toLowerCase(), pw=f.password.value, err=$('.lg-err',body), go=$('.lg-go',body);
+    const fail=m=>{ err.textContent=m; err.hidden=false; go.disabled=false; };
+    if(!Auth.ready()) return fail('아직 서버(Supabase)가 연결되지 않았어요.');
+    if(!ID_RE.test(id)) return fail('아이디는 영문 소문자·숫자·_ . - 로 3–20자예요.');
+    if(pw.length<6) return fail('비밀번호는 6자 이상이에요.');
+    if(mode==='signup'&&pw!==f.password2.value) return fail('비밀번호 확인이 달라요.');
+    go.disabled=true; err.hidden=true;
+    try{
+      if(mode==='signup') await Auth.signUp(id,pw); else await Auth.signIn(id,pw);
+      await afterLogin(mode==='signup');
+      closeDialog(); toast(`${Auth.user.name}님, ${mode==='signup'?'환영해요':'다시 오셨네요'}!`);
+      goHome();
+    }catch(x){
+      const c=String(x.code||''), m=String(x.message||'');
+      fail(c==='user_already_exists'||/already registered/i.test(m)?'이미 있는 아이디예요. 로그인해 주세요.'
+        :c==='invalid_credentials'||/invalid login/i.test(m)?'아이디 또는 비밀번호가 맞지 않아요.'
+        :c==='weak_password'?'비밀번호가 너무 약해요. 더 길게 만들어 주세요.'
+        :c==='email_confirm_on'?'서버 설정에서 "Confirm email"이 켜져 있어요. 꺼야 아이디로 가입할 수 있어요.'
+        :c==='over_request_rate_limit'||x.status===429?'잠시 후 다시 시도해 주세요 (요청이 너무 많아요).'
+        :'로그인하지 못했어요: '+m);
+    }
+  });
+  showDialog({title:'Practice Book 계정',body,actions:[{label:'닫기'}]});
+}
+async function logout(){
+  if(!confirm('로그아웃할까요?')) return;
+  if(view==='editor') saveNow();
+  await Cloud.chain;
+  await Auth.signOut(); useExamples(); toast('로그아웃했어요'); goHome();
+}
+
+/* =========================================================
    Practice Book — home screen & routing  (#/ = home, #/sheet/<id> = editor)
    ========================================================= */
 let view='home';
@@ -3047,6 +3222,7 @@ function openSheet(id,edit=false){
   const h='#/sheet/'+encodeURIComponent(id); if(location.hash!==h) location.hash=h;
 }
 function createSheet(){
+  if(!Auth.user) return openLogin('새 시트를 만들려면 로그인하세요');
   if(view==='editor') saveNow();
   const s=newSong(), lib=readLib(); lib[s.id]=s; if(!writeLib(lib)) return;
   openSheet(s.id,true); setTimeout(()=>$('#title').focus(),50);   // a new sheet opens ready to edit
@@ -3075,11 +3251,15 @@ function sheetInfo(s){
 }
 const homeState={q:'',sort:'updated'};
 function renderHome(){
-  const all=Object.values(readLib()).map(normalizeSong);
-  $('#hStats').textContent=all.length?`${all.length}개 시트 · 마지막 수정 ${relTime(Math.max(...all.map(s=>s.updatedAt)))}`:'아직 시트가 없어요 — 새 시트로 시작해 보세요';
+  const all=Object.values(readLib()).map(normalizeSong), U=Auth.user;
+  document.body.classList.toggle('signed-in',!!U);
+  $('#hUser').innerHTML=U?`<span class="who">${esc(U.name)}</span><button class="btn sm" id="hLogout">로그아웃</button>`:'';
+  $('#hStats').textContent=!U?'로그인 전에는 예시 3곡을 둘러볼 수 있어요 — 로그인하면 내 시트를 만들고 어느 기기에서든 이어서 써요'
+    :all.length?`${U.name}님의 시트 ${all.length}개 · 마지막 수정 ${relTime(Math.max(...all.map(s=>s.updatedAt)))}`:'아직 시트가 없어요 — 새 시트로 시작해 보세요';
+  $('#hRecentTitle').textContent=U?'최근에 만든 시트':'예시 시트';
   // recent (by creation)
   const recent=[...all].sort((a,b)=>b.createdAt-a.createdAt).slice(0,7);
-  $('#hRecent').innerHTML='<button class="scard new" data-new="1"><b>+</b>새 시트</button>'+recent.map(s=>{
+  $('#hRecent').innerHTML=`<button class="scard new" data-new="1"><b>+</b>${U?'새 시트':'로그인하고<br>내 시트 만들기'}</button>`+recent.map(s=>{
     const i=sheetInfo(s), key=s.key?keyName(s.key):'조 미지정';
     const chords=Array.from({length:8},(_,k)=>{ const t=i.filled[k]?splitBar(i.filled[k]):[]; return `<span class="mb" data-n="${t.length}">${t.map(chordHTML).join('')}</span>`; }).join('');
     return `<article class="scard" data-id="${esc(s.id)}" tabindex="0">
@@ -3107,6 +3287,7 @@ function renderHome(){
 }
 function homeAction(a,id){
   const lib=readLib(), s=lib[id]; if(!s) return;
+  if(a!=='dl'&&!Auth.user) return openLogin('내 시트로 만들려면 로그인하세요');
   if(a==='dup'){ const c=clone(s); c.id=uid(); c.title=(c.title||'제목 없음')+' (사본)'; c.createdAt=c.updatedAt=Date.now(); lib[c.id]=c; writeLib(lib); renderHome(); return toast('복제했어요'); }
   if(a==='dl') return download(fileName(s)+'.chordsheet.json',s);
   if(a==='del'){ if(!confirm(`"${s.title||'제목 없음'}"을(를) 삭제할까요? 되돌릴 수 없어요.`)) return; delete lib[id]; writeLib(lib); renderHome(); toast('삭제했어요'); }
@@ -3193,7 +3374,7 @@ function bind(){
   });
   $('#dlg').addEventListener('close',stopDialogMedia);
   $('#dlg').addEventListener('cancel',stopDialogMedia);   // Esc
-  $('#btnEdit').onclick=()=>{ setEditMode(!editMode); toast(editMode?'수정 모드 — 코드·멜로디·메모를 편집할 수 있어요':'수정 완료 — 시트가 잠겼어요'); };
+  $('#btnEdit').onclick=()=>{ if(!Auth.user) return openLogin('편집하고 저장하려면 로그인하세요'); setEditMode(!editMode); toast(editMode?'수정 모드 — 코드·멜로디·메모를 편집할 수 있어요':'수정 완료 — 시트가 잠겼어요'); };
   $('#refLinks').addEventListener('click',e=>{
     const a=e.target.closest('a[data-yt]'); if(!a||e.metaKey||e.ctrlKey||e.shiftKey) return;   // modifier-click keeps the normal new tab
     e.preventDefault(); openYouTube(a.href);
@@ -3217,7 +3398,10 @@ function bind(){
   $('#hBackup').onclick=()=>{ const all=Object.values(readLib()); if(!all.length) return toast('저장된 시트가 없어요'); download('practice-book-'+new Date().toISOString().slice(0,10)+'.json',{app:'chordsheet',type:'library',songs:all}); };
   $('#hQ').addEventListener('input',e=>{ homeState.q=e.target.value; renderHome(); });
   $('#hSort').addEventListener('change',e=>{ homeState.sort=e.target.value; renderHome(); });
+  $('#hLogin').onclick=()=>openLogin('','login');
+  $('#hSignup').onclick=()=>openLogin('','signup');
   $('#home').addEventListener('click',e=>{
+    if(e.target.id==='hLogout') return logout();
     if(e.target.closest('[data-new]')) return createSheet();
     const item=e.target.closest('[data-id]'); if(!item) return;
     const a=e.target.closest('button[data-a]');
@@ -3393,27 +3577,19 @@ function applyPrefsUI(){
   syncLoopBtn();
 }
 
-function boot(){
+async function boot(){
   song=newSong(); dirty=false;   // placeholder until a sheet is opened
   bind();
-  const lib=readLib();
-  // examples v2: remove the old example sheets, seed three public-domain tunes
-  if(!store.get(LS.seeded2,false)){
-    Object.values(lib).forEach(s=>{
-      const old=(s.title==='Misty'&&s.artist==='Erroll Garner')||(s.title==='사용법 예시'&&s.artist==='Practice Book')||s.title==='예시 시트';
-      if(!old) return;
-      if((s.updatedAt||0)-(s.createdAt||0)>5000&&!confirm(`예전 예시 시트 "${s.title}"에 직접 수정한 내용이 있어요. 삭제할까요?\n(취소하면 그대로 남겨요)`)) return;
-      delete lib[s.id];
-    });
-    exampleSongs().forEach((s,i)=>{ s.createdAt=s.updatedAt=Date.now()-i*60000; lib[s.id]=s; });
-    store.set(LS.seeded,true); store.set(LS.seeded2,true);
-  }
-  // carry over work from the old single-sheet draft
-  const d=store.get(LS.draft,null);
-  if(d&&d.song&&!lib[d.song.id]){ const s=normalizeSong(d.song); if(s.sections.some(x=>x.bars.some(b=>b.trim())||x.notes.some(n=>n.length))) lib[s.id]=s; }
-  try{ localStorage.removeItem(LS.draft); }catch(e){}
-  writeLib(lib);
+  useExamples();                 // logged out: only the 3 examples
   applyPrefsUI(); renderAll();
+  // restore a saved login
+  const sess=store.get(LS.session,null);
+  if(sess&&Auth.ready()){
+    Auth.session=sess; const u=sess.user||{}; Auth.user={id:u.id,name:(u.user_metadata&&u.user_metadata.username)||(u.email||'').split('@')[0]};
+    setView('home'); $('#hStats').textContent='내 시트 불러오는 중…';
+    try{ await Cloud.load(); }
+    catch(e){ console.info('로그인 복원 실패:',e.message); Auth.clear(); useExamples(); toast('로그인이 만료됐어요 — 다시 로그인해 주세요'); }
+  }
   route();
   Engine.loadSF(prefs.inst); Engine.loadSF(prefs.melInst);  // prefetch samples
 }
