@@ -131,7 +131,7 @@ button{cursor:pointer}
 
 /* ---------- bars: staff mode (Real Book style) ---------- */
 .staff-mode .rows{gap:2px}
-.staff-mode .row{border-left:0}
+.staff-mode .row{border-left:0;grid-template-columns:calc(var(--lead,0px) + (100% - var(--lead,0px)) / 4) repeat(3,minmax(0,1fr))}   /* first bar also holds clef + key signature (--lead) */
 .staff-mode .bar{display:block;height:auto;border-right:0;padding:0}
 .staff-mode .bar.sec-end{border-right:0}
 .staff-mode .tsmark{display:none}
@@ -344,8 +344,18 @@ body.has-kbd.kbd-min{--kb-h:30px}
 .ap-h{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);margin-bottom:4px}
 .ap-h .an-tag{margin-left:0}
 .ap-x{margin-left:auto}
-.ann-pop.modal .an-n{background:#6a4fb3}
-.ann-pop.cad .an-n{background:#2f5fb3}
+.ann-pop.k-modal .an-n{background:#6a4fb3}
+.ap-body{max-height:min(60vh,460px);overflow:auto;overscroll-behavior:contain}
+.an-best{font-size:10.5px;font-weight:700;color:var(--accent);letter-spacing:.02em;margin-bottom:1px}
+.an-alts{margin-top:8px;padding-top:7px;border-top:1px dashed var(--rule)}
+.an-alts-h{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:4px}
+.an-alts-h small{font-weight:400}
+.an-alt{display:flex;gap:7px;padding:3px 0}
+.an-alt-n{flex:none;height:16px;margin-top:1px;padding:0 5px;border-radius:8px;border:1px solid var(--rule);color:var(--muted);font-size:10px;font-weight:700;line-height:14px;white-space:nowrap}
+.an-alt-t{font-weight:700;font-size:12px;font-family:var(--font-serif);margin-bottom:1px}
+.an-alt-t .an-tag{margin-left:6px;font-family:var(--font-ui);font-weight:400}
+.an-alt .an-p{font-size:12px;color:var(--muted)}
+.ann-pop.k-cad .an-n{background:#2f5fb3}
 .anpanel{position:fixed;right:12px;top:110px;bottom:calc(var(--kb-h) + 12px);width:min(360px,calc(100vw - 24px));z-index:34;background:#fff;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 14px 36px rgba(0,0,0,.16);display:flex;flex-direction:column;overflow:hidden}
 .anpanel[hidden]{display:none}
 .an-head{padding:12px 14px 6px;border-bottom:1px solid #eee}
@@ -359,16 +369,16 @@ body.has-kbd.kbd-min{--kb-h:30px}
 .an-item:hover{background:#f7f3ec}
 .an-item.on{background:#f1ebdf}
 .an-n{flex:none;min-width:20px;height:20px;padding:0 4px;border-radius:10px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;display:grid;place-items:center}
-.an-item.modal .an-n{background:#6a4fb3}
-.an-item.cad .an-n{background:#2f5fb3}
+.an-item.k-modal .an-n{background:#6a4fb3}
+.an-item.k-cad .an-n{background:#2f5fb3}
 .an-h{display:flex;align-items:center;gap:6px;font-size:11.5px;line-height:1.3;color:var(--muted)}
 .an-h .an-tag{margin-left:0}
 .an-t{font-weight:700;font-size:13px;margin:1px 0 3px;font-family:var(--font-serif)}
 .an-p{font-size:12.5px;line-height:1.55;color:var(--ink-2);margin:0}
 .an-tag{display:inline-block;font-size:10.5px;border-radius:999px;padding:0 7px;margin-left:6px;background:var(--accent-soft);color:var(--accent)}
-.an-tag.modal{background:#ece6fa;color:#6a4fb3}
-.an-tag.cad{background:#e7eefb;color:#2f5fb3}
-.an-tag.borrow{background:#fdf0dc;color:#a0620a}
+.an-tag.k-modal{background:#ece6fa;color:#6a4fb3}
+.an-tag.k-cad{background:#e7eefb;color:#2f5fb3}
+.an-tag.k-borrow{background:#fdf0dc;color:#a0620a}
 body.view-home .anpanel{display:none!important}
 @media (min-width:1180px){ body.ann-open .paper{margin-left:max(16px,calc((100vw - 1000px - 380px)/2))} }
 
@@ -1168,9 +1178,11 @@ function renderSections(){
     $('.form-pick',el).innerHTML=formOpts;
     $('.sec-ts',el).innerHTML=`<option value="">기본 (${song.timeSig})</option>`+TS_LIST.map(t=>`<option${t===sec.timeSig?' selected':''}>${t}</option>`).join('');
     $('.f-sound',el).value=sec.sound; $('.f-rhythm',el).value=sec.rhythm; $('.f-melody',el).value=sec.melody;
-    const ts=sec.timeSig||song.timeSig, rows=$('.rows',el);
+    const ts=sec.timeSig||song.timeSig, rows=$('.rows',el), ksN=keySig(song.key).n;
     for(let r=0;r<sec.bars.length;r+=4){
       const row=document.createElement('div'); row.className='row';
+      // clef + key signature (+ time signature) width, same as drawStaff's lead-in → every bar keeps equal room for chords and notes
+      if(prefs.staff) row.style.setProperty('--lead',(26+ksN*7+(ksN?3:0)+(r===0&&ts!==prevTs?17:0))+'px');
       for(let c=0;c<4;c++){
         const bi=r+c, cell=document.createElement('div');
         cell.className='bar'; cell.dataset.fi=fi;
@@ -2579,51 +2591,68 @@ function analyzeSong(s){
         add(it,'cad','종지',key.minor?'iiø–V–i':'ii–V–I',`${c.sym} → ${nx.sym} → ${nx2.sym}: 으뜸화음으로 돌아오는 ${key.minor?'마이너 ':''}ii–V–I 종지.`,items[k+2].fiEnd);
       return;
     }
-    const down5=!!nx&&step(c,nx)===5;
-    // in a minor key a plain major IV is read as the Dorian IV first (e.g. Greensleeves' D in A minor)
-    const dorianIV=key.minor&&deg===5&&c.fam==='maj'&&!c.iv.includes(11);
-    const domish=!dorianIV&&(c.fam==='dom'||(c.fam==='maj'&&!c.iv.includes(11)&&down5));
-    if(domish){
+    /* every reading that fits, scored by how well the context supports it — the best goes on top, the rest become "다른 해석" */
+    const cands=[], cand=(score,kind,tag,title,text)=>cands.push({score,kind,tag,title,text});
+    const down5=!!nx&&step(c,nx)===5, downHalf=!!nx&&step(c,nx)===11, isDom=c.fam==='dom';
+    const majTri=c.fam==='maj'&&!c.iv.includes(11);
+    // secondary dominant: a dominant 7th resolving down a 5th is the textbook case; a plain major triad doing it is weaker
+    if(isDom||(majTri&&down5)){
       const tDeg=(deg+5)%12, T=DIA_RN[mode][tDeg];
       if(T&&!T.includes('°')&&tDeg!==0){
         let r='';
         if(down5&&nx) r=(nx.fam==='dom'&&!isDiatonic(nx,key))?' 다음 화음도 도미넌트라 5도씩 이어지는 도미넌트 체인이에요.':` 다음 ${nx.sym}(${roman(nx,key)})로 정석대로 해결돼요.`;
-        else if(nx&&step(c,nx)===11) r=` 그런데 반음 아래 ${nx.sym}로 미끄러지듯 해결돼요.`;
+        else if(downHalf) r=` 그런데 반음 아래 ${nx.sym}로 미끄러지듯 해결돼요.`;
         else if(nx) r=` 그런데 ${T}가 아니라 ${nx.sym}(${roman(nx,key)})로 가서 기대를 비켜 가요.`;
-        return add(it,'sec','세컨더리 도미넌트',`V7/${T}`,`${head}: 음계 밖의 ${outTones(c)}이(가) ${T}(${nm((c.root+5)%12)}) 쪽으로 끌어당기는 이끈음 역할 — ${T}로 가는 세컨더리 도미넌트로 볼 수 있어요.${r}`);
+        cand(down5?(isDom?100:70):55,'sec','세컨더리 도미넌트',`V7/${T}`,`${head}: 음계 밖의 ${outTones(c)}이(가) ${T}(${nm((c.root+5)%12)}) 쪽으로 끌어당기는 이끈음 역할 — ${T}로 가는 세컨더리 도미넌트로 볼 수 있어요.${r}`);
       }
-      if(nx&&step(c,nx)===11)
-        return add(it,'sub','대리 화음',`SubV7/${romanNum(nx,key)}`,`${head}: 반음 아래 ${nx.sym}로 해결 — 원래의 ${nm((nx.root+7)%12)}7 대신 쓰는 트라이톤 대리(SubV). 두 화음의 3음·7음(트라이톤)이 같아서 같은 기능을 해요.`);
-      if(deg===10&&nx&&dg(nx)===0)
-        return add(it,'borrow','차용','백도어 도미넌트 ♭VII7',`${head} → ${nx.sym}: V7 대신 ♭VII7로 으뜸화음에 돌아오는 '백도어' 종지${pv&&tri(pv)==='m'&&dg(pv)===5?' (앞의 iv와 함께 iv–♭VII7–I)':''}. 같은 으뜸음의 단조에서 빌려온 부드러운 해결이에요.`);
     }
+    if(isDom&&downHalf)
+      cand(90,'sub','대리 화음',`SubV7/${romanNum(nx,key)}`,`${head}: 반음 아래 ${nx.sym}로 해결 — 원래의 ${nm((nx.root+7)%12)}7 대신 쓰는 트라이톤 대리(SubV). 두 화음의 3음·7음(트라이톤)이 같아서 같은 기능을 해요.`);
+    if(isDom&&deg===10&&nx&&dg(nx)===0)
+      cand(85,'borrow','차용','백도어 도미넌트 ♭VII7',`${head} → ${nx.sym}: V7 대신 ♭VII7로 으뜸화음에 돌아오는 '백도어' 종지${pv&&tri(pv)==='m'&&dg(pv)===5?' (앞의 iv와 함께 iv–♭VII7–I)':''}. 같은 으뜸음의 단조에서 빌려온 부드러운 해결이에요.`);
+    // diminished: a full dim7 is symmetric, so it can stand for four leading-tone chords
     if(c.fam==='dim'){
-      if(nx&&step(c,nx)===1) return add(it,'dim','디미니시','경과 디미니시',`${head}: 반음 위 ${nx.sym}로 올라가는 경과 디미니시. ${nm((c.root+8)%12)}7♭9(= ${roman(nx,key)}로 가는 V7♭9)에서 근음을 뺀 소리와 같아요.`);
-      if(nx&&nx.root===c.root) return add(it,'dim','디미니시','공통음 디미니시',`${head}: 다음 ${nx.sym}과 근음을 공유하는 장식적 디미니시 — 같은 자리에서 색만 살짝 비틀어요.`);
-      return add(it,'dim','디미니시','연결 디미니시',`${head}: 반음 진행으로 앞뒤 화음을 매끄럽게 잇는 디미니시.`);
+      const full=c.iv.includes(9), roots=full?[0,3,6,9].map(i=>(c.root+i)%12):[c.root];
+      if(nx){
+        const lt=roots.find(r=>(nx.root-r+12)%12===1);
+        if(lt!=null){
+          const own=lt===c.root, V=(lt+8)%12;
+          cand(own?95:90,'dim','디미니시',own?'경과 디미니시':`vii°7/${roman(nx,key)} (= ${nm(lt)}°7)`,
+            `${head}: ${own?`반음 위 ${nx.sym}로 올라가는 경과 디미니시.`:`같은 음으로 된 ${nm(lt)}°7로 읽으면 ${nx.sym}의 이끈음(${nm(lt)})이 근음인 이끈7화음이에요.`} ${nm(V)}7♭9(= ${roman(nx,key)}로 가는 V7♭9)에서 근음을 뺀 소리와 같아 도미넌트처럼 끌어당겨요.`);
+        }
+        if(roots.includes(nx.root))
+          cand(85,'dim','디미니시','공통음 디미니시',`${head}: ${nx.root===c.root?'':`(= ${nm(nx.root)}°7) `}다음 ${nx.sym}과 근음을 공유하는 장식적 디미니시 — 근음은 그대로 두고 나머지 음이 반음씩 움직여 ${nx.sym}에 안착해요.`);
+      }
+      cand(25,'dim','디미니시','연결 디미니시',`${head}: 반음 진행으로 앞뒤 화음을 매끄럽게 잇는 디미니시.`);
     }
+    // related ii of a secondary dominant
     const backdoorNext=nx&&dg(nx)===10&&nx2&&dg(nx2)===0;
     if((c.fam==='min'||c.fam==='hd')&&nx&&nx.fam==='dom'&&step(c,nx)===5&&!isDiatonic(nx,key)&&!backdoorNext){
       const T=DIA_RN[mode][(dg(nx)+5)%12]||nm((nx.root+5)%12);
-      return add(it,'sec','관련 ii',`ii–V/${T}의 ii`,`${head}: 바로 뒤 ${nx.sym}와 짝을 이루는 ii–V. ${T}로 잠깐 조를 옮기는(토니시제이션) 느낌을 만들어요.`);
+      cand(90,'sec','관련 ii',`ii–V/${T}의 ii`,`${head}: 바로 뒤 ${nx.sym}와 짝을 이루는 ii–V. ${T}로 잠깐 조를 옮기는(토니시제이션) 느낌을 만들어요.`);
     }
+    // modal interchange: borrowed from a mode on the same tonic; idiomatic borrowings score higher
     const hit=BORROW_MODES(key).find(([,iv])=>allIn(coreOf(c),pcset(key.tonic,iv)));
     if(hit){
-      let ex='';
+      let ex='', sc=60;
       if(!key.minor){
-        if(deg===5&&tri(c)==='m') ex=' 마이너 iv(서브도미넌트 마이너): IV의 3음을 반음 내려 애잔해져요. IV–iv–I가 대표적이에요.';
-        else if(deg===3||deg===8||deg===10) ex=' ♭III·♭VI·♭VII은 록·팝·영화음악에서 흔한 차용이에요 (예: ♭VI–♭VII–I).';
-        else if(deg===1) ex=' 나폴리 ♭II — 보통 V로 이어져 강한 긴장을 만들어요.';
+        if(deg===5&&tri(c)==='m'){ sc=80; ex=' 마이너 iv(서브도미넌트 마이너): IV의 3음을 반음 내려 애잔해져요. IV–iv–I가 대표적이에요.'; }
+        else if(deg===3||deg===8||deg===10){ sc=75; ex=' ♭III·♭VI·♭VII은 록·팝·영화음악에서 흔한 차용이에요 (예: ♭VI–♭VII–I).'; }
+        else if(deg===1){ sc=70; ex=' 나폴리 ♭II — 보통 V로 이어져 강한 긴장을 만들어요.'; }
       } else {
-        if(deg===5&&tri(c)==='M') ex=` 도리안 IV: 단조인데 밝게 들리는 IV — 장6도(♮6)가 들어가요.${down5&&dg(nx)===10?` 바로 ${nx.sym}(♭VII)로 가므로 V/♭VII로도 들을 수 있어요.`:''}`;
-        else if(deg===0&&tri(c)==='M') ex=k===items.length-1?' 피카르디 3도: 단조 곡을 장화음으로 끝맺어요.':' 같은 으뜸음의 장화음 — 순간적으로 밝아져요.';
-        else if(deg===1) ex=' 나폴리 ♭II — 프리지안 색이에요.';
+        if(deg===5&&tri(c)==='M'){ sc=75; ex=' 도리안 IV: 단조인데 밝게 들리는 IV — 장6도(♮6)가 들어가요.'; }
+        else if(deg===0&&tri(c)==='M'){ sc=k===items.length-1?85:65; ex=k===items.length-1?' 피카르디 3도: 단조 곡을 장화음으로 끝맺어요.':' 같은 으뜸음의 장화음 — 순간적으로 밝아져요.'; }
+        else if(deg===1){ sc=70; ex=' 나폴리 ♭II — 프리지안 색이에요.'; }
       }
-      return add(it,'borrow','모달 인터체인지',`${romanNum(c,key)}: ${nm(key.tonic)} ${hit[0]}에서 차용`,`${head}: ${KN} 음계 밖의 ${outTones(c)}. 같은 으뜸음 ${nm(key.tonic)}의 ${hit[0]}에서 빌려온 화음(모달 인터체인지)으로 볼 수 있어요.${ex}`);
+      cand(sc,'borrow','모달 인터체인지',`${romanNum(c,key)}: ${nm(key.tonic)} ${hit[0]}에서 차용`,`${head}: ${KN} 음계 밖의 ${outTones(c)}. 같은 으뜸음 ${nm(key.tonic)}의 ${hit[0]}에서 빌려온 화음(모달 인터체인지)으로 볼 수 있어요.${ex}`);
     }
     if(pv&&tri(c)==='M'&&tri(pv)==='M'&&[3,4,8,9].includes(step(pv,c)))
-      return add(it,'chrom','반음계','크로매틱 미디언트',`${head}: ${pv.sym}에서 3도 관계의 장화음으로 이동 — 공통음 하나를 붙잡고 색을 확 바꾸는 크로매틱 미디언트.`);
-    add(it,'chrom','비다이아토닉',`${rn}: 음계 밖 화음`,`${head}: ${outTones(c)}이(가) 음계 밖이에요. 앞뒤 화음과 묶어 일시적 전조나 반음 보이스리딩으로 해석해 보세요.`);
+      cand(45,'chrom','반음계','크로매틱 미디언트',`${head}: ${pv.sym}에서 3도 관계의 장화음으로 이동 — 공통음 하나를 붙잡고 색을 확 바꾸는 크로매틱 미디언트.`);
+    if(!cands.length)
+      cand(20,'chrom','비다이아토닉',`${rn}: 음계 밖 화음`,`${head}: ${outTones(c)}이(가) 음계 밖이에요. 앞뒤 화음과 묶어 일시적 전조나 반음 보이스리딩으로 해석해 보세요.`);
+    cands.sort((a,b)=>b.score-a.score);
+    const [top,...rest]=cands, alts=rest.filter(x=>x.score>=40);   // catch-all readings only when nothing better fits
+    notes.push({fi:it.fi,fe:it.fiEnd,ti:it.ti,kind:top.kind,tag:top.tag,title:top.title,text:top.text,alts});
   });
 
   /* ---- 2. runs of chords outside the key → one tonicization / mode region ---- */
@@ -2719,10 +2748,10 @@ function renderAnalysis(){
   const F={all:()=>true,out:n=>['sec','sub','borrow','dim','chrom'].includes(n.kind),modal:n=>n.kind==='modal',cad:n=>n.kind==='cad'};
   $$('#anFilter .chip').forEach(b=>b.classList.toggle('on',b.dataset.f===annFilter));
   const list=ANN.notes.filter(F[annFilter]);
-  $('#anList').innerHTML=list.length?list.map(n=>`<div class="an-item ${n.kind}" data-fi="${n.fi}" data-fe="${n.fe}">
+  $('#anList').innerHTML=list.length?list.map(n=>`<div class="an-item k-${n.kind}" data-fi="${n.fi}" data-fe="${n.fe}">
       <span class="an-n">${n.n}</span>
-      <div><div class="an-h">${n.fi===n.fe?`${n.fi+1}마디`:`${n.fi+1}–${n.fe+1}마디`}<span class="an-tag ${n.kind}">${esc(n.tag)}</span></div>
-      <div class="an-t">${esc(n.title)}</div><p class="an-p">${esc(n.text)}</p></div></div>`).join('')
+      <div><div class="an-h">${n.fi===n.fe?`${n.fi+1}마디`:`${n.fi+1}–${n.fe+1}마디`}<span class="an-tag k-${n.kind}">${esc(n.tag)}</span></div>
+      ${annBody(n)}</div></div>`).join('')
     :`<div class="empty-note">${K?'이 필터에 해당하는 코멘트가 없어요':''}</div>`;
 }
 let annTimer=0;
@@ -2731,6 +2760,12 @@ const queueAnalysis=()=>{
   clearTimeout(annTimer);
   annTimer=setTimeout(()=>{ ANN=analyzeSong(song); hideAnnPop(); $$('.bar').forEach(c=>fillRns(c)); renderAnalysis(); },400);
 };
+/* a comment: the most plausible reading first, then the other readings that also fit (best first) */
+function annBody(n){
+  const alts=n.alts||[];
+  return `${alts.length?'<div class="an-best">가장 유력한 해석</div>':''}<div class="an-t">${esc(n.title)}</div><p class="an-p">${esc(n.text)}</p>`
+    +(alts.length?`<div class="an-alts"><div class="an-alts-h">다른 해석 <small>· 유력한 순</small></div>${alts.map((a,i)=>`<div class="an-alt"><span class="an-alt-n">${i+2}순위</span><div><div class="an-alt-t">${esc(a.title)}<span class="an-tag k-${a.kind}">${esc(a.tag)}</span></div><p class="an-p">${esc(a.text)}</p></div></div>`).join('')}</div>`:'');
+}
 /* footnote popup: one comment, anchored under its "(n)" */
 function hideAnnPop(){ const p=$('#annPop'); if(p&&!p.hidden){ p.hidden=true; $$('.rn-ref.on').forEach(x=>x.classList.remove('on')); } }
 function showAnnPop(btn){
@@ -2738,14 +2773,19 @@ function showAnnPop(btn){
   if(!note) return;
   if(!p.hidden&&p.dataset.n===String(n)){ hideAnnPop(); return; }   // same number again → close
   hideAnnPop();
-  p.dataset.n=n; p.className='ann-pop '+note.kind;
-  p.innerHTML=`<div class="ap-h"><span class="an-n">${n}</span>${note.fi===note.fe?`${note.fi+1}마디`:`${note.fi+1}–${note.fe+1}마디`}<span class="an-tag ${note.kind}">${esc(note.tag)}</span><button type="button" class="gp-x ap-x" title="닫기">✕</button></div>
-    <div class="an-t">${esc(note.title)}</div><p class="an-p">${esc(note.text)}</p>`;
+  p.dataset.n=n; p.className='ann-pop k-'+note.kind;
+  p.innerHTML=`<div class="ap-h"><span class="an-n">${n}</span>${note.fi===note.fe?`${note.fi+1}마디`:`${note.fi+1}–${note.fe+1}마디`}<span class="an-tag k-${note.kind}">${esc(note.tag)}</span><button type="button" class="gp-x ap-x" title="닫기">✕</button></div>
+    <div class="ap-body">${annBody(note)}</div>`;
   p.hidden=false; btn.classList.add('on');
-  const r=btn.getBoundingClientRect(), w=p.offsetWidth, h=p.offsetHeight, vw=document.documentElement.clientWidth;
+  const body=$('.ap-body',p), r=btn.getBoundingClientRect(), w=p.offsetWidth, vw=document.documentElement.clientWidth;
   const left=Math.max(8,Math.min(r.left+r.width/2-w/2,vw-w-8));
   const kb=parseFloat(getComputedStyle(document.body).getPropertyValue('--kb-h'))||0;   // bottom piano bar
-  const below=r.bottom+8+h<=innerHeight-kb||r.top-8-h<0;   // flip above when there's no room below
+  const tb=view==='editor'?Math.max(0,$('.toolbar').getBoundingClientRect().bottom):0;   // sticky toolbar
+  const roomB=innerHeight-kb-r.bottom-16, roomA=r.top-tb-16;
+  let h=p.offsetHeight;
+  const below=h<=roomB||roomB>=roomA;                      // below if it fits, else the roomier side
+  const room=below?roomB:roomA;
+  if(h>room){ body.style.maxHeight=Math.max(120,body.offsetHeight-(h-room))+'px'; h=p.offsetHeight; }
   p.style.left=(left+scrollX)+'px'; p.style.top=((below?r.bottom+8:r.top-8-h)+scrollY)+'px';
   p.classList.toggle('up',!below);
   p.style.setProperty('--ax',Math.max(14,Math.min(r.left+r.width/2-left,w-14))+'px');
