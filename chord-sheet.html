@@ -438,6 +438,9 @@ body.signed-in .only-out{display:none!important}
 .lg-go{justify-self:start;padding:9px 18px}
 .lg-err{margin:0;color:var(--accent);font-size:13px}
 .lg-note{margin:0;font-size:12px;color:var(--muted);line-height:1.5}
+.lg-form label.lg-keep{display:flex;flex-wrap:wrap;align-items:center;gap:2px 6px;font-size:13px;color:var(--ink);cursor:pointer}
+.lg-keep input{margin:0;width:15px;height:15px;accent-color:var(--accent)}
+.lg-keep span{flex-basis:100%;padding-left:21px;font-size:11.5px;font-weight:400;color:var(--muted)}
 
 /* ---------- home (Practice Book) ---------- */
 body.view-home .toolbar,body.view-home .paper,body.view-home .kbd,body.view-home .palette,body.view-home .groove{display:none!important}
@@ -1008,11 +1011,14 @@ function normalizeSong(o){
 /* =========================================================
    storage
    ========================================================= */
-const LS={lib:'chordsheet.library.v1',draft:'chordsheet.draft.v1',prefs:'chordsheet.prefs.v1',session:'chordsheet.session.v1',migrated:'chordsheet.migrated.v1'};
-const store={
-  get(k,def){try{const v=localStorage.getItem(k);return v?JSON.parse(v):def;}catch(e){return def;}},
-  set(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true;}catch(e){return false;}}
-};
+const LS={lib:'chordsheet.library.v1',draft:'chordsheet.draft.v1',prefs:'chordsheet.prefs.v1',session:'chordsheet.session.v1',migrated:'chordsheet.migrated.v1',login:'chordsheet.login.v1'};
+const mkStore=S=>({
+  get(k,def){try{const v=S().getItem(k);return v?JSON.parse(v):def;}catch(e){return def;}},
+  set(k,v){try{S().setItem(k,JSON.stringify(v));return true;}catch(e){return false;}},
+  del(k){try{S().removeItem(k);}catch(e){}}
+});
+const store=mkStore(()=>localStorage);      // survives closing the browser
+const sstore=mkStore(()=>sessionStorage);   // this tab only
 /* the library lives in memory: logged out → the 3 examples (read-only), logged in → the account's sheets, synced to Supabase */
 let LIB={}, SAVED={};                 // SAVED: id → JSON last confirmed on the server
 const readLib=()=>LIB;
@@ -3125,6 +3131,8 @@ const AUTH_DOMAIN='c7chord.github.io';
 const ID_RE=/^[a-z0-9_.-]{3,20}$/;
 const Auth={
   user:null,session:null,
+  persist:true,     // "로그인 상태 유지": true → localStorage (stays logged in), false → sessionStorage (until this tab closes)
+  refreshing:null,  // one refresh at a time — Supabase rotates refresh tokens, and reusing an old one can revoke the whole session
   ready:()=>!!(SUPA.url&&SUPA.key),
   email:id=>`${id.toLowerCase()}@${AUTH_DOMAIN}`,
   async req(path,body,token){
@@ -3133,35 +3141,50 @@ const Auth={
     if(!r.ok) throw Object.assign(new Error(d.msg||d.error_description||d.message||('HTTP '+r.status)),{code:d.error_code||d.code||d.error,status:r.status});
     return d;
   },
+  userOf(s){ const u=(s&&s.user)||{}; return {id:u.id,name:(u.user_metadata&&u.user_metadata.username)||(u.email||'').split('@')[0]}; },
+  box(){ return this.persist?store:sstore; },
+  adopt(s,persist){ this.session=s; this.user=this.userOf(s); this.persist=persist; },
   set(d){
     this.session={access_token:d.access_token,refresh_token:d.refresh_token,expires_at:d.expires_at||Math.floor(Date.now()/1000)+(d.expires_in||3600),user:d.user};
-    const u=d.user||{}; this.user={id:u.id,name:(u.user_metadata&&u.user_metadata.username)||(u.email||'').split('@')[0]};
-    store.set(LS.session,this.session);
+    this.user=this.userOf(this.session);
+    this.box().set(LS.session,this.session);
   },
-  clear(){ this.session=null; this.user=null; try{ localStorage.removeItem(LS.session); }catch(e){} },
+  forget(){ this.session=null; this.user=null; },                         // memory only — the saved login stays
+  clear(){ this.box().del(LS.session); this.forget(); },
   async signUp(id,pw){
     const d=await this.req('/auth/v1/signup',{email:this.email(id),password:pw,data:{username:id}});
     if(!d.access_token) throw Object.assign(new Error('confirm'),{code:'email_confirm_on'});
     this.set(d);
   },
   async signIn(id,pw){ this.set(await this.req('/auth/v1/token?grant_type=password',{email:this.email(id),password:pw})); },
+  fresh:s=>!!s&&s.expires_at-60>=Date.now()/1000,
   async token(){
     if(!this.session) return null;
-    if(this.session.expires_at-60<Date.now()/1000) this.set(await this.req('/auth/v1/token?grant_type=refresh_token',{refresh_token:this.session.refresh_token}));
-    return this.session.access_token;
+    if(this.fresh(this.session)) return this.session.access_token;
+    // another tab may already have refreshed — take its rotated tokens from storage instead of reusing ours
+    const s=this.box().get(LS.session,null), mine=s&&s.user&&this.session.user&&s.user.id===this.session.user.id;
+    if(mine&&this.fresh(s)){ this.session=s; return s.access_token; }
+    if(mine&&s.refresh_token) this.session.refresh_token=s.refresh_token;
+    if(!this.refreshing) this.refreshing=this.req('/auth/v1/token?grant_type=refresh_token',{refresh_token:this.session.refresh_token})
+      .then(d=>this.set(d)).finally(()=>{ this.refreshing=null; });
+    await this.refreshing;
+    return this.session&&this.session.access_token;
   },
   async signOut(){
     const t=this.session&&this.session.access_token;
     this.clear();
-    if(t) fetch(SUPA.url+'/auth/v1/logout',{method:'POST',headers:{apikey:SUPA.key,Authorization:'Bearer '+t}}).catch(()=>{});
+    // scope=local: end only this login — the default (global) would also sign out every other device
+    if(t) fetch(SUPA.url+'/auth/v1/logout?scope=local',{method:'POST',headers:{apikey:SUPA.key,Authorization:'Bearer '+t}}).catch(()=>{});
   }
 };
+// the saved login is gone (revoked / refresh token rejected) — as opposed to being offline or the server hiccuping
+const authDead=e=>!!e&&[400,401,403].includes(e.status);
 const Cloud={
   busy:false,error:false,timer:0,chain:Promise.resolve(),
   async api(method,path,body,extra={}){
     const t=await Auth.token();
     const r=await fetch(SUPA.url+'/rest/v1/'+path,{method,keepalive:method!=='GET',headers:{apikey:SUPA.key,Authorization:'Bearer '+t,'Content-Type':'application/json',...extra},body:body?JSON.stringify(body):undefined});
-    if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.message||('HTTP '+r.status)); }
+    if(!r.ok){ const d=await r.json().catch(()=>({})); throw Object.assign(new Error(d.message||('HTTP '+r.status)),{status:r.status}); }
     return r.json().catch(()=>null);
   },
   async load(){
@@ -3209,21 +3232,22 @@ async function afterLogin(isNew){
   Cloud.sync();
 }
 function openLogin(reason='',mode='login'){
-  const body=document.createElement('div');
+  const body=document.createElement('div'), saved=store.get(LS.login,{}), keep=saved.remember!==false;
   const draw=()=>{
-    const su=mode==='signup';
+    const su=mode==='signup', lastId=!su&&keep&&saved.id||'';
     body.innerHTML=`
       ${reason?`<p class="lg-reason">${esc(reason)}</p>`:''}
       <div class="lg-tabs"><button type="button" class="chip${su?'':' on'}" data-mode="login">로그인</button><button type="button" class="chip${su?' on':''}" data-mode="signup">회원가입</button></div>
       <form class="lg-form" autocomplete="on">
-        <label>아이디<input class="field" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required placeholder="영문 소문자·숫자 3–20자"></label>
-        <label>비밀번호<input class="field" type="password" name="password" autocomplete="${su?'new-password':'current-password'}" required placeholder="6자 이상"></label>
+        <label>아이디<input class="field" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" required placeholder="영문 소문자·숫자 3–20자" value="${esc(lastId)}"${lastId?'':' autofocus'}></label>
+        <label>비밀번호<input class="field" type="password" name="password" autocomplete="${su?'new-password':'current-password'}" required placeholder="6자 이상"${lastId?' autofocus':''}></label>
         ${su?'<label>비밀번호 확인<input class="field" type="password" name="password2" autocomplete="new-password" required></label>':''}
+        <label class="lg-keep"><input type="checkbox" name="keep"${keep?' checked':''}>로그인 상태 유지<span>이 브라우저에서는 다음에 열어도 로그인돼 있어요 · 공용 PC에서는 끄세요</span></label>
         <p class="lg-err" hidden></p>
         <button class="btn primary lg-go">${su?'가입하고 시작하기':'로그인'}</button>
         <p class="lg-note">${su?'이메일 없이 아이디로만 가입해요. 아이디·비밀번호를 잊으면 찾을 수 없으니 꼭 기억해 두세요. 가입하면 예시 3곡이 내 시트로 복사돼요.':'로그인하면 어느 기기에서든 내 시트를 이어서 쓸 수 있어요.'}</p>
       </form>`;
-    $('input',body).focus();
+    $(lastId?'input[name=password]':'input',body).focus();
   };
   draw();
   body.addEventListener('click',e=>{ const t=e.target.closest('[data-mode]'); if(t){ mode=t.dataset.mode; draw(); } });
@@ -3236,8 +3260,11 @@ function openLogin(reason='',mode='login'){
     if(pw.length<6) return fail('비밀번호는 6자 이상이에요.');
     if(mode==='signup'&&pw!==f.password2.value) return fail('비밀번호 확인이 달라요.');
     go.disabled=true; err.hidden=true;
+    Auth.persist=f.keep.checked;
     try{
       if(mode==='signup') await Auth.signUp(id,pw); else await Auth.signIn(id,pw);
+      store.set(LS.login,Auth.persist?{remember:true,id}:{remember:false});   // the ID is prefilled next time only when remembered
+      if(Auth.persist) sstore.del(LS.session); else store.del(LS.session);    // "don't remember" also drops a login remembered earlier in this browser
       await afterLogin(mode==='signup');
       closeDialog(); toast(`${Auth.user.name}님, ${mode==='signup'?'환영해요':'다시 오셨네요'}!`);
       goHome();
@@ -3636,17 +3663,49 @@ async function boot(){
   bind();
   useExamples();                 // logged out: only the 3 examples
   applyPrefsUI(); renderAll();
-  // restore a saved login
-  const sess=store.get(LS.session,null);
-  if(sess&&Auth.ready()){
-    Auth.session=sess; const u=sess.user||{}; Auth.user={id:u.id,name:(u.user_metadata&&u.user_metadata.username)||(u.email||'').split('@')[0]};
-    setView('home'); $('#hStats').textContent='내 시트 불러오는 중…';
-    try{ await Cloud.load(); }
-    catch(e){ console.info('로그인 복원 실패:',e.message); Auth.clear(); useExamples(); toast('로그인이 만료됐어요 — 다시 로그인해 주세요'); }
-  }
+  setView('home');
+  await restoreLogin();
   route();
   Engine.loadSF(prefs.inst); Engine.loadSF(prefs.melInst);  // prefetch samples
 }
+/* restore a saved login ("로그인 상태 유지" → localStorage, otherwise this tab's sessionStorage).
+   Only a rejected login is forgotten; offline / server trouble keeps it and tries again. */
+const restore={timer:0,wait:15000};
+async function restoreLogin(){
+  clearTimeout(restore.timer);
+  if(Auth.user||!Auth.ready()) return true;
+  const local=store.get(LS.session,null), sess=local||sstore.get(LS.session,null);
+  if(!sess||!sess.refresh_token) return false;
+  Auth.adopt(sess,!!local);
+  if(view==='home') $('#hStats').textContent='내 시트 불러오는 중…';
+  try{ await Cloud.load(); restore.wait=15000; return true; }
+  catch(e){
+    console.info('로그인 복원 실패:',e.message);
+    useExamples();
+    if(authDead(e)){ Auth.clear(); toast('로그인이 만료됐어요 — 다시 로그인해 주세요'); return false; }
+    Auth.forget();   // logged out for now, but the saved login stays
+    if(restore.wait===15000) toast('서버에 연결하지 못했어요 — 연결되면 자동으로 다시 로그인해요');
+    restore.timer=setTimeout(retryLogin,restore.wait); restore.wait=Math.min(restore.wait*2,300000);
+    return false;
+  }
+}
+async function retryLogin(){
+  if(Auth.user) return;
+  if(await restoreLogin()){
+    toast(`${Auth.user.name}님, 다시 연결됐어요`);
+    if(view==='editor'&&readLib()[song.id]) updateDirtyUI(); else goHome();   // an example open in the editor isn't one of the account's sheets
+  }
+}
+addEventListener('online',()=>{ if(!Auth.user){ restore.wait=15000; retryLogin(); } });
+// keep tabs in step: a token refreshed in one tab, a login or a logout in another
+addEventListener('storage',e=>{
+  if(e.key!==LS.session) return;
+  const s=store.get(LS.session,null);
+  if(Auth.user&&Auth.persist){
+    if(s&&s.user&&Auth.session.user&&s.user.id===Auth.session.user.id){ Auth.session=s; return; }
+    if(!s){ Auth.forget(); useExamples(); toast('다른 탭에서 로그아웃했어요'); goHome(); }
+  } else if(!Auth.user&&s) retryLogin();
+});
 boot();
 </script>
 </body>
