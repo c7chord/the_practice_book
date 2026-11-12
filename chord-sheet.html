@@ -331,8 +331,21 @@ body.has-kbd.kbd-min{--kb-h:30px}
 .groove > .gp-help:last-child{margin:8px 0 0;padding-top:8px;border-top:1px solid #eee}
 
 /* ---------- analysis comments ---------- */
-.rn.ann{text-decoration:underline dotted rgba(179,54,43,.55);text-underline-offset:2px;overflow:visible}
-.rn sup{display:inline-block;min-width:13px;height:13px;line-height:13px;margin-left:2px;padding:0 3px;border-radius:7px;background:var(--accent);color:#fff;font:700 9px/13px var(--font-ui);text-align:center;vertical-align:4px;font-style:normal}
+.rn.ann{display:flex;flex-wrap:wrap;align-items:baseline;column-gap:2px;overflow:visible}
+.rn.ann .rt{flex:none}
+.rn-refs{flex:none;position:relative;z-index:2;white-space:nowrap;font:600 10.5px/1.15 var(--font-ui);font-style:normal;color:var(--accent)}
+.rn-ref{margin:0;padding:0 2px;border:0;border-radius:3px;background:none;color:inherit;font:inherit;cursor:pointer}
+.rn-ref:hover,.rn-ref.on{background:var(--accent);color:#fff}
+.rn-ref:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.ann-pop{position:absolute;z-index:60;width:min(320px,calc(100vw - 16px));background:#fff;color:var(--ink);border-radius:10px;padding:10px 12px 12px;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 12px 30px rgba(0,0,0,.2)}
+.ann-pop[hidden]{display:none}
+.ann-pop::before{content:'';position:absolute;top:-6px;left:calc(var(--ax,50%) - 6px);width:12px;height:12px;background:#fff;transform:rotate(45deg);box-shadow:-1px -1px 0 rgba(0,0,0,.08)}
+.ann-pop.up::before{top:auto;bottom:-6px;box-shadow:1px 1px 0 rgba(0,0,0,.08)}
+.ap-h{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);margin-bottom:4px}
+.ap-h .an-tag{margin-left:0}
+.ap-x{margin-left:auto}
+.ann-pop.modal .an-n{background:#6a4fb3}
+.ann-pop.cad .an-n{background:#2f5fb3}
 .anpanel{position:fixed;right:12px;top:110px;bottom:calc(var(--kb-h) + 12px);width:min(360px,calc(100vw - 24px));z-index:34;background:#fff;border-radius:12px;box-shadow:0 0 0 1px rgba(0,0,0,.07),0 14px 36px rgba(0,0,0,.16);display:flex;flex-direction:column;overflow:hidden}
 .anpanel[hidden]{display:none}
 .an-head{padding:12px 14px 6px;border-bottom:1px solid #eee}
@@ -512,7 +525,7 @@ body.view-home{--kb-h:0px}
 }
 @media print{
   body{background:#fff}
-  .toolbar,.sec-tools,.sec-foot,.add-sec,.help,.form-pick,.mini,.ctx,.toast,.reflinks,.palette,.kbd,.chordbox,.groove{display:none!important}
+  .toolbar,.sec-tools,.sec-foot,.add-sec,.help,.form-pick,.mini,.ctx,.toast,.reflinks,.palette,.kbd,.chordbox,.groove,.ann-pop{display:none!important}
   .paper{box-shadow:none;margin:0;max-width:none;padding:0}
   .bar.sel,.bar.playing,.bar.mel-on{background-color:transparent;box-shadow:none}
   .staff g.n.on{color:var(--ink)}
@@ -674,6 +687,7 @@ body.view-home{--kb-h:0px}
 
 <input id="proxy" name="cellInput" aria-label="선택한 마디에 코드 입력" tabindex="-1" autocomplete="off" spellcheck="false" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0">
 <div class="ctx" id="ctx" hidden></div>
+<div class="ann-pop" id="annPop" role="dialog" aria-label="해석 코멘트" hidden></div>
 <aside class="anpanel" id="anPanel" hidden>
   <div class="an-head">
     <div class="an-top"><b>해석 코멘트</b><button class="gp-x" id="anClose" title="숨기기">✕</button></div>
@@ -1099,13 +1113,19 @@ function fillCell(cell,text){
   if(toks.length===1&&toks[0]==='%'){ box.innerHTML=`<div class="tok">${chordHTML('%')}</div>`; rns.innerHTML=''; }
   else{
     box.innerHTML=toks.map(t=>`<div class="tok">${chordHTML(t)}</div>`).join('');
-    const fi=+cell.dataset.fi;
-    rns.innerHTML=key&&toks.length?toks.map((t,ti)=>{
-      const c=tokKind(t)==='chord'?parseChord(t):null, n=prefs.annot?ANN.marks.get(fi+':'+ti):null;
-      return `<span class="rn${n?' ann':''}"${n?` title="해석 코멘트 ${n}"`:''}>${c?esc(roman(c,key)):''}${n?`<sup>${n}</sup>`:''}</span>`;
-    }).join(''):'';
+    fillRns(cell,toks);
   }
   cell.classList.toggle('empty',!toks.length);
+}
+/* red roman numerals + footnote numbers "(1)" — click one to see just that comment */
+function fillRns(cell,toks=splitBar(barText(+cell.dataset.fi))){
+  const rns=cell.querySelector('.rns'), key=prefs.showRoman?parseKey(song.key):null, fi=+cell.dataset.fi;
+  if(toks.length===1&&toks[0]==='%'){ rns.innerHTML=''; return; }
+  rns.innerHTML=key&&toks.length?toks.map((t,ti)=>{
+    const c=tokKind(t)==='chord'?parseChord(t):null, ns=ANN.marks.get(fi+':'+ti)||[];
+    const refs=ns.length?`<span class="rn-refs">(${ns.map(n=>`<button type="button" class="rn-ref" data-n="${n}" title="해석 코멘트 ${n} 보기">${n}</button>`).join(',')})</span>`:'';
+    return `<span class="rn${ns.length?' ann':''}"><span class="rt">${c?esc(roman(c,key)):''}</span>${refs}</span>`;
+  }).join(''):'';
 }
 const SEC_HTML=`
   <div class="sec-head">
@@ -1133,7 +1153,8 @@ const SEC_HTML=`
   </div>`;
 function renderSections(){
   commitEdit();
-  if(prefs.annot) ANN=analyzeSong(song);
+  ANN=prefs.showRoman||prefs.annot?analyzeSong(song):{key:null,est:false,notes:[],marks:new Map()};
+  hideAnnPop();
   MEL_SCALE=melScale(song);
   song.sections.forEach(syncNotes);
   if(mel){ if(mel.fi>=flatCount()) mel=null; else mel.idx=Math.min(mel.idx,notesOf(mel.fi).length-1); }
@@ -2676,7 +2697,12 @@ function analyzeSong(s){
   else{ let f0=0; s.sections.forEach(sec=>{ const m=modeCheck(f0,f0+sec.bars.length-1,(sec.form||'섹션')+': '); if(m) notes.push(m); f0+=sec.bars.length; }); }
 
   notes.sort((a,b)=>a.fi-b.fi||(a.ti==null?1:0)-(b.ti==null?1:0));
-  notes.forEach((n,i)=>{ n.n=i+1; const k=n.fi+':'+n.ti; if(n.ti!=null&&!res.marks.has(k)) res.marks.set(k,n.n); });
+  // footnote numbers on the red roman numerals: a chord's own comments, and a range comment (mode/vamp) on the first chord of its range
+  notes.forEach((n,i)=>{
+    n.n=i+1;
+    const at=n.ti!=null?n:items.find(x=>x.fi>=n.fi&&x.fi<=n.fe); if(!at) return;
+    const k=at.fi+':'+at.ti; res.marks.set(k,[...(res.marks.get(k)||[]),n.n]);
+  });
   res.notes=notes;
   return res;
 }
@@ -2689,7 +2715,7 @@ function renderAnalysis(){
   const K=ANN.key;
   $('#anKey').innerHTML=!K?'코드를 입력하면 조를 추정해 해석해요'
     :ANN.est?`조가 비어 있어 <b>${esc(keyName(K.name))}</b>로 추정했어요 <button class="btn sm" id="anSetKey">이 조로 설정</button>`
-    :`<b>${esc(keyName(K.name))}</b> 기준 · 빨간 도수 옆 번호가 코멘트와 연결돼요`;
+    :`<b>${esc(keyName(K.name))}</b> 기준 · 빨간 도수 옆 (번호)를 누르면 그 코멘트만 볼 수 있어요`;
   const F={all:()=>true,out:n=>['sec','sub','borrow','dim','chrom'].includes(n.kind),modal:n=>n.kind==='modal',cad:n=>n.kind==='cad'};
   $$('#anFilter .chip').forEach(b=>b.classList.toggle('on',b.dataset.f===annFilter));
   const list=ANN.notes.filter(F[annFilter]);
@@ -2700,7 +2726,30 @@ function renderAnalysis(){
     :`<div class="empty-note">${K?'이 필터에 해당하는 코멘트가 없어요':''}</div>`;
 }
 let annTimer=0;
-const queueAnalysis=()=>{ if(!prefs.annot) return; clearTimeout(annTimer); annTimer=setTimeout(()=>{ ANN=analyzeSong(song); renderAnalysis(); },400); };
+const queueAnalysis=()=>{
+  if(!prefs.annot&&!prefs.showRoman) return;
+  clearTimeout(annTimer);
+  annTimer=setTimeout(()=>{ ANN=analyzeSong(song); hideAnnPop(); $$('.bar').forEach(c=>fillRns(c)); renderAnalysis(); },400);
+};
+/* footnote popup: one comment, anchored under its "(n)" */
+function hideAnnPop(){ const p=$('#annPop'); if(p&&!p.hidden){ p.hidden=true; $$('.rn-ref.on').forEach(x=>x.classList.remove('on')); } }
+function showAnnPop(btn){
+  const p=$('#annPop'), n=+btn.dataset.n, note=ANN.notes.find(x=>x.n===n);
+  if(!note) return;
+  if(!p.hidden&&p.dataset.n===String(n)){ hideAnnPop(); return; }   // same number again → close
+  hideAnnPop();
+  p.dataset.n=n; p.className='ann-pop '+note.kind;
+  p.innerHTML=`<div class="ap-h"><span class="an-n">${n}</span>${note.fi===note.fe?`${note.fi+1}마디`:`${note.fi+1}–${note.fe+1}마디`}<span class="an-tag ${note.kind}">${esc(note.tag)}</span><button type="button" class="gp-x ap-x" title="닫기">✕</button></div>
+    <div class="an-t">${esc(note.title)}</div><p class="an-p">${esc(note.text)}</p>`;
+  p.hidden=false; btn.classList.add('on');
+  const r=btn.getBoundingClientRect(), w=p.offsetWidth, h=p.offsetHeight, vw=document.documentElement.clientWidth;
+  const left=Math.max(8,Math.min(r.left+r.width/2-w/2,vw-w-8));
+  const kb=parseFloat(getComputedStyle(document.body).getPropertyValue('--kb-h'))||0;   // bottom piano bar
+  const below=r.bottom+8+h<=innerHeight-kb||r.top-8-h<0;   // flip above when there's no room below
+  p.style.left=(left+scrollX)+'px'; p.style.top=((below?r.bottom+8:r.top-8-h)+scrollY)+'px';
+  p.classList.toggle('up',!below);
+  p.style.setProperty('--ax',Math.max(14,Math.min(r.left+r.width/2-left,w-14))+'px');
+}
 
 /* =========================================================
    progression finder — match by roman-numeral function, listen in place
@@ -3292,7 +3341,7 @@ async function logout(){
    ========================================================= */
 let view='home';
 function setView(v){
-  view=v; document.body.classList.toggle('view-home',v==='home'); renderAnalysis();
+  view=v; document.body.classList.toggle('view-home',v==='home'); hideAnnPop(); renderAnalysis();
   document.title=v==='home'?'Practice Book':(song.title||'제목 없음')+' · Practice Book';
 }
 function openEditor(s,edit=false){ editMode=edit; loadSong(s,{fromLib:true}); setView('editor'); setEditMode(edit); scrollTo(0,0); }
@@ -3568,6 +3617,7 @@ function bind(){
     else if(e.target.classList.contains('sec-ts')){ pushHistory(); sec.timeSig=e.target.value; renderSections(); markDirty(); queueRestart(); }
   });
   secs.addEventListener('click',e=>{
+    const ref=e.target.closest('.rn-ref'); if(ref){ e.stopPropagation(); showAnnPop(ref); return; }
     const b=e.target.closest('button[data-act]'); if(!b) return;
     secAction(b.dataset.act,+b.closest('.sec').dataset.si);
   });
@@ -3575,6 +3625,7 @@ function bind(){
   // bars: staff (melody) or chord area (drag-select, edit, context menu)
   secs.addEventListener('mousedown',e=>{
     if(e.button!==0) return;
+    if(e.target.closest('.rn-ref')) return;   // footnote number → popup (click handler)
     const svg=e.target.closest('svg.staff');
     if(svg) return staffMouseDown(e,svg);
     const cell=e.target.closest('.bar'); if(!cell) return;
@@ -3599,7 +3650,7 @@ function bind(){
     dragging=false;
     if(noteDrag){ const {fi,i,pushed}=noteDrag; noteDrag=null; if(pushed) previewNote(notesOf(fi)[i]); }
   });
-  secs.addEventListener('dblclick',e=>{ if(e.target.closest('svg.staff')) return; const cell=e.target.closest('.bar'); if(cell&&!e.target.classList.contains('bar-edit')) startEdit(+cell.dataset.fi); });
+  secs.addEventListener('dblclick',e=>{ if(e.target.closest('svg.staff,.rn-ref')) return; const cell=e.target.closest('.bar'); if(cell&&!e.target.classList.contains('bar-edit')) startEdit(+cell.dataset.fi); });
   secs.addEventListener('contextmenu',e=>{
     const cell=e.target.closest('.bar'); if(!cell||e.target.classList.contains('bar-edit')) return;
     e.preventDefault(); commitEdit(); exitMel();
@@ -3609,6 +3660,11 @@ function bind(){
   });
   $('#ctx').addEventListener('click',e=>{ const b=e.target.closest('button[data-c]'); if(b&&!b.disabled) ctxAction(b.dataset.c); });
   document.addEventListener('mousedown',e=>{ if(!e.target.closest('#ctx')) hideCtx(); },true);
+  // footnote popup: closes on its ✕, outside click, Esc, resize
+  $('#annPop').addEventListener('click',e=>{ if(e.target.closest('.ap-x')) hideAnnPop(); });
+  document.addEventListener('mousedown',e=>{ if(!e.target.closest('#annPop,.rn-ref')) hideAnnPop(); },true);
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('#annPop').hidden){ e.stopPropagation(); hideAnnPop(); } },true);
+  addEventListener('resize',hideAnnPop);
   addEventListener('scroll',hideCtx,{passive:true});
   let rz=0;
   addEventListener('resize',()=>{ hideCtx(); clearTimeout(rz); rz=setTimeout(()=>{ if(prefs.staff) $$('.bar').forEach(drawStaff); },120); });
