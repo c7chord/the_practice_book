@@ -337,6 +337,37 @@ body.has-kbd.kbd-min{--kb-h:30px}
 .rn-ref{margin:0;padding:0 2px;border:0;border-radius:3px;background:none;color:inherit;font:inherit;cursor:pointer}
 .rn-ref:hover,.rn-ref.on{background:var(--accent);color:#fff}
 .rn-ref:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+/* ---------- guitar diagrams ---------- */
+.dgms{display:flex;gap:4px;min-width:0}
+.dgms:empty{display:none}
+.staff-mode .dgms{padding:4px 6px 0 var(--pre,8px)}
+.dgm{flex:1 1 0;min-width:0;display:flex;align-items:flex-end;border:0;background:none;padding:0;margin:0;cursor:pointer;border-radius:4px}
+.dgm:hover,.dgm.on{background:rgba(179,54,43,.08)}
+.dgm svg{display:block;max-width:100%;height:auto}
+@media (min-width:700px){ .dgm svg{width:68px} }
+.dgm.fixed svg{filter:drop-shadow(0 1px 0 rgba(179,54,43,.35))}
+.gtr-on .bar{height:auto;min-height:64px}
+.gdiag .gs,.gdiag .gf{stroke:#a69d90;stroke-width:.8}
+.gdiag .gn{stroke:var(--ink);stroke-width:2.6}
+.gdiag .gd{fill:var(--ink)}
+.gdiag .gr{fill:var(--accent)}
+.gdiag .go{fill:none;stroke:var(--ink-2);stroke-width:.9}
+.gdiag .go.gr{fill:none;stroke:var(--accent);stroke-width:1.2}
+.gdiag .gx{font:8px var(--font-ui);fill:var(--muted);text-anchor:middle}
+.gdiag .gp{font:7.5px var(--font-ui);fill:var(--muted);text-anchor:middle}
+.gtr-opts{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
+.gtr-opts[hidden],.gtr-tt[hidden]{display:none}
+.gtr-tt{width:130px}
+.gtr-pop{width:min(330px,calc(100vw - 16px))}
+.gp-sym .ch{font-size:17px}
+.gp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin:6px 0 8px}
+.gp-c{display:flex;flex-direction:column;align-items:center;gap:1px;border:1px solid var(--rule-2);background:#fff;border-radius:6px;padding:3px 2px 2px;cursor:pointer}
+.gp-c:hover{border-color:var(--rule)}
+.gp-c.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.gp-c span{font:10px var(--font-ui);color:var(--muted);letter-spacing:.02em}
+.gp-own{display:flex;gap:5px}
+.gp-own .field{flex:1;min-width:0;font-size:13px;padding:4px 7px}
+.gp-note{font-size:11.5px;color:var(--muted);margin:7px 0 0;line-height:1.45}
 .ann-pop{position:absolute;z-index:60;width:min(320px,calc(100vw - 16px));background:#fff;color:var(--ink);border-radius:10px;padding:10px 12px 12px;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 12px 30px rgba(0,0,0,.2)}
 .ann-pop[hidden]{display:none}
 .ann-pop::before{content:'';position:absolute;top:-6px;left:calc(var(--ax,50%) - 6px);width:12px;height:12px;background:#fff;transform:rotate(45deg);box-shadow:-1px -1px 0 rgba(0,0,0,.08)}
@@ -535,7 +566,7 @@ body.view-home{--kb-h:0px}
 }
 @media print{
   body{background:#fff}
-  .toolbar,.sec-tools,.sec-foot,.add-sec,.help,.form-pick,.mini,.ctx,.toast,.reflinks,.palette,.kbd,.chordbox,.groove,.ann-pop{display:none!important}
+  .toolbar,.sec-tools,.sec-foot,.add-sec,.help,.form-pick,.mini,.ctx,.toast,.reflinks,.palette,.kbd,.chordbox,.groove,.ann-pop,.gtr-pop{display:none!important}
   .paper{box-shadow:none;margin:0;max-width:none;padding:0}
   .bar.sel,.bar.playing,.bar.mel-on{background-color:transparent;box-shadow:none}
   .staff g.n.on{color:var(--ink)}
@@ -659,6 +690,12 @@ body.view-home{--kb-h:0px}
       <label class="m chk"><input type="checkbox" id="showStaff" name="showStaff"> 오선(멜로디) 표시</label>
       <label class="m chk"><input type="checkbox" id="showRoman" name="showRoman"> 해석(도수) 표시</label>
       <label class="m chk" title="음계 밖 화음·종지·모드 구간에 대한 코멘트 창"><input type="checkbox" id="showAnn" name="showAnn"> 해석 코멘트</label>
+      <label class="m chk" title="코드 위에 기타 코드표(운지) — 앞뒤 코드와 손 이동이 적은 운지로 골라요"><input type="checkbox" id="showGtr" name="showGtr"> 기타 코드표</label>
+      <span class="gtr-opts" id="gtrOpts" hidden>
+        <label class="m">튜닝 <select id="gtrTuning" name="gtrTuning" class="field"></select></label>
+        <input id="gtrTuningTxt" name="gtrTuningTxt" class="field gtr-tt" placeholder="E A D G B E" spellcheck="false" autocomplete="off" aria-label="튜닝 직접 입력 (낮은 줄부터)" hidden>
+        <label class="m">카포 <select id="gtrCapo" name="gtrCapo" class="field"></select></label>
+      </span>
       <span class="hint" id="keyHint" hidden>조를 선택하면 도수 해석과 조표가 표시돼요</span>
     </div>
     <div class="chordbox" id="chordBox" role="button" tabindex="0" title="클릭하면 전체 코드표가 열려요 (프리셋 · 필터 · 미리듣기)">
@@ -698,6 +735,7 @@ body.view-home{--kb-h:0px}
 <input id="proxy" name="cellInput" aria-label="선택한 마디에 코드 입력" tabindex="-1" autocomplete="off" spellcheck="false" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0">
 <div class="ctx" id="ctx" hidden></div>
 <div class="ann-pop" id="annPop" role="dialog" aria-label="해석 코멘트" hidden></div>
+<div class="ann-pop gtr-pop" id="gtrPop" role="dialog" aria-label="기타 운지" hidden></div>
 <aside class="anpanel" id="anPanel" hidden>
   <div class="an-head">
     <div class="an-top"><b>해석 코멘트</b><button class="gp-x" id="anClose" title="숨기기">✕</button></div>
@@ -1029,6 +1067,7 @@ function normalizeSong(o){
   });
   if(!s.sections.length) s.sections=[newSection('Verse 1',8)];
   if(s.key&&!parseKey(s.key)) s.key='';
+  const gt=cleanGuitar(o.guitar); if(gt) s.guitar=gt;
   return s;
 }
 
@@ -1050,7 +1089,7 @@ function writeLib(lib){ LIB=lib; if(Auth.user) Cloud.sync(); return true; }
 
 let prefs=Object.assign({inst:'piano',pattern:'hold',metro:false,countin:false,vol:0.8,showRoman:true,annot:false,loop:false,
   staff:true,playChords:true,playMelody:true,melInst:'voice',
-  drums:false,bass:false,drumStyle:'auto',bassStyle:'auto',complexity:.5,drumLoud:.7,fill:'end',secDyn:true,swing:'auto',bassTone:'auto',drumVol:.8,bassVol:1},store.get(LS.prefs,{}));
+  gtr:false,drums:false,bass:false,drumStyle:'auto',bassStyle:'auto',complexity:.5,drumLoud:.7,fill:'end',secDyn:true,swing:'auto',bassTone:'auto',drumVol:.8,bassVol:1},store.get(LS.prefs,{}));
 const savePrefs=()=>store.set(LS.prefs,prefs);
 
 /* =========================================================
@@ -1125,7 +1164,17 @@ function fillCell(cell,text){
     box.innerHTML=toks.map(t=>`<div class="tok">${chordHTML(t)}</div>`).join('');
     fillRns(cell,toks);
   }
+  fillDgms(cell,toks);
   cell.classList.toggle('empty',!toks.length);
+}
+/* guitar diagrams above the chords (the planned voicing of each occurrence) */
+function fillDgms(cell,toks=splitBar(barText(+cell.dataset.fi))){
+  const box=cell.querySelector('.dgms'); if(!box) return;
+  if(!prefs.gtr||(toks.length===1&&toks[0]==='%')){ box.innerHTML=''; return; }
+  const fi=+cell.dataset.fi, plan=gtrPlan();
+  box.dataset.n=toks.length;
+  box.innerHTML=toks.map((t,ti)=>{ const v=plan.get(fi+':'+ti);
+    return v?`<button type="button" class="dgm${v.fixed?' fixed':''}" data-ti="${ti}" title="${esc(v.c.sym)} · ${fretsStr(v.f)}${v.fixed?' (이 곡의 운지)':''} — 눌러서 다른 운지 보기">${gtrSVG(v.f,v.c)}</button>`:'<span class="dgm"></span>'; }).join('');
 }
 /* red roman numerals + footnote numbers "(1)" — click one to see just that comment */
 function fillRns(cell,toks=splitBar(barText(+cell.dataset.fi))){
@@ -1164,12 +1213,13 @@ const SEC_HTML=`
 function renderSections(){
   commitEdit();
   ANN=prefs.showRoman||prefs.annot?analyzeSong(song):{key:null,est:false,notes:[],marks:new Map()};
+  hideGtrPop();
   hideAnnPop();
   MEL_SCALE=melScale(song);
   song.sections.forEach(syncNotes);
   if(mel){ if(mel.fi>=flatCount()) mel=null; else mel.idx=Math.min(mel.idx,notesOf(mel.fi).length-1); }
   const wrap=$('#sections'); wrap.innerHTML='';
-  wrap.classList.toggle('staff-mode',!!prefs.staff);
+  wrap.classList.toggle('staff-mode',!!prefs.staff); wrap.classList.toggle('gtr-on',!!prefs.gtr);
   const formOpts='<option value="">▾</option>'+FORMS.map(f=>`<option>${esc(f)}</option>`).join('');
   let fi=0, prevTs=null;
   song.sections.forEach((sec,si)=>{
@@ -1191,7 +1241,7 @@ function renderSections(){
         let inner='';
         if(c===0) inner+=`<span class="bno">${fi+1}</span>`;
         if(bi===0&&ts!==prevTs){ cell.dataset.ts=ts; const [n,d]=ts.split('/'); inner+=`<span class="tsmark"><span>${n}</span><span>${d}</span></span>`; }
-        cell.innerHTML=inner+`<div class="body"><div class="toks"></div>${prefs.staff?'<svg class="staff" height="66"></svg>':''}<div class="rns"></div></div>`;
+        cell.innerHTML=inner+`<div class="body"><div class="dgms"></div><div class="toks"></div>${prefs.staff?'<svg class="staff" height="66"></svg>':''}<div class="rns"></div></div>`;
         fillCell(cell,sec.bars[bi]);
         if(mel&&mel.fi===fi) cell.classList.add('mel-on');
         row.appendChild(cell); fi++;
@@ -1308,16 +1358,36 @@ function setEditMode(on){
 function applyLock(root=document){
   const ro=!editMode;
   $$('#title,#artist,#refs,.form-input,.note textarea',root).forEach(el=>{ el.readOnly=ro; });
-  $$('#key,#ts,.form-pick,.sec-ts',root).forEach(el=>{ el.disabled=ro; });
+  $$('#key,#ts,.form-pick,.sec-ts,#gtrTuning,#gtrCapo',root).forEach(el=>{ el.disabled=ro; });
+  $$('#gtrTuningTxt',root).forEach(el=>{ el.readOnly=ro; });
 }
 function renderHeader(){
   $('#title').value=song.title; $('#artist').value=song.artist; $('#bpm').value=song.bpm;
   $('#key').value=song.key; $('#ts').value=song.timeSig; $('#refs').value=song.references;
   $('#showRoman').checked=prefs.showRoman; $('#showStaff').checked=prefs.staff; $('#showAnn').checked=prefs.annot;
+  renderGtrOpts();
   $('#keyHint').hidden=!((prefs.showRoman||prefs.staff)&&!song.key);
   renderRefs(); renderChordBox(); applyLock($('.song-head'));
 }
 function renderAll(){ renderHeader(); renderSections(); updateDirtyUI(); }
+const normTuning=t=>tuningMidi(t).join();
+function renderGtrOpts(){
+  $('#showGtr').checked=!!prefs.gtr; $('#gtrOpts').hidden=!prefs.gtr;
+  if(!prefs.gtr) return;
+  const g=song.guitar||{}, cur=normTuning(g.tuning||'E A D G B E');
+  const hit=TUNING_PRESETS.find(([t])=>normTuning(t)===cur);
+  $('#gtrTuning').innerHTML=TUNING_PRESETS.map(([t,l])=>`<option value="${t}">${l} (${prettyTuning(t)})</option>`).join('')+'<option value="custom">직접 입력…</option>';
+  $('#gtrTuning').value=hit?hit[0]:'custom';
+  $('#gtrTuningTxt').hidden=!!hit; $('#gtrTuningTxt').value=hit?'':(g.tuning||'');
+  $('#gtrCapo').innerHTML=Array.from({length:13},(_,i)=>`<option value="${i}">${i?i+'프렛':'없음'}</option>`).join('');
+  $('#gtrCapo').value=String(g.capo|0);
+}
+const prettyTuning=t=>normAcc(t).replace(/#/g,'♯').replace(/([A-G])b/g,'$1♭');
+function setGtr(patch){
+  if(!needEdit()) return renderGtrOpts();
+  song.guitar=cleanGuitar({...(song.guitar||{}),...patch});
+  markDirty(); renderGtrOpts(); renderSections();
+}
 function paintSel(){
   const r=selRange();
   $$('.bar').forEach(el=>{
@@ -2019,6 +2089,133 @@ function guitarVoicing(c,inst){
   }
   return inst==='drive'?notes.slice(0,4):notes;
 }
+/* ---------- guitar: tuning, playable voicings, smooth movement between chords, diagrams ----------
+   song.guitar = {tuning:'E A D G B E' (low→high), capo:0, voicings:{<chord symbol>:'x02210'}}
+   a voicing string lists the 6 strings low→high: x = muted, digits = fret above the capo ("x,10,12,12,11,x" for frets ≥ 10) */
+const GTR_STD=[40,45,50,55,59,64];
+const TUNING_PRESETS=[['E A D G B E','표준'],['Eb Ab Db Gb Bb Eb','반음 내림'],['D A D G B E','Drop D'],['D G D G B D','오픈 G'],['D A D F# A D','오픈 D'],['D A D G A D','DADGAD'],['C G C G C E','오픈 C']];
+function tuningMidi(str){
+  const ns=normAcc(String(str||'')).trim().split(/[\s,]+/).filter(Boolean);
+  if(ns.length!==6||!ns.every(n=>/^[A-Ga-g][#b]?$/.test(n))) return GTR_STD.slice();
+  return ns.map((n,i)=>{ const pc=notePc(n[0].toUpperCase()+n.slice(1)); return GTR_STD[i]+(((pc-GTR_STD[i])%12+18)%12-6); });   // nearest to standard
+}
+function cleanGuitar(g){
+  if(!g||typeof g!=='object') return null;
+  const out={tuning:typeof g.tuning==='string'?g.tuning.slice(0,40):'',capo:clamp(Math.round(+g.capo)||0,0,12),voicings:{}};
+  if(g.voicings&&typeof g.voicings==='object') for(const [k,v] of Object.entries(g.voicings)) if(typeof v==='string'&&parseFrets(v)) out.voicings[k.slice(0,40)]=v;
+  if(out.tuning&&tuningMidi(out.tuning).join()===GTR_STD.join()&&!/^\s*E\s+A\s+D\s+G\s+B\s+E\s*$/i.test(out.tuning)) out.tuning='';
+  return out.tuning||out.capo||Object.keys(out.voicings).length?out:null;
+}
+const gtrConf=()=>{ const g=song.guitar||{}, capo=g.capo|0; return {open:tuningMidi(g.tuning).map(m=>m+capo),capo,fixed:g.voicings||{}}; };
+function parseFrets(s){
+  s=String(s||'').trim(); const parts=/[,\s]/.test(s)?s.split(/[,\s]+/).filter(Boolean):s.split('');
+  if(parts.length!==6) return null;
+  const f=parts.map(p=>/^[xX]$/.test(p)?null:/^\d{1,2}$/.test(p)&&+p<=20?+p:undefined);
+  return f.includes(undefined)||f.every(x=>x==null)?null:f;
+}
+const fretsStr=f=>f.some(x=>x!=null&&x>9)?f.map(x=>x==null?'x':x).join(','):f.map(x=>x==null?'x':x).join('');
+const chordPcs=c=>new Set([...c.iv.map(i=>(c.root+i)%12),...(c.bass!=null?[c.bass]:[])]);
+/* tones a guitar voicing must have: root, 3rd/sus, 7th, altered tones, the top extension (a plain 5th and lower extensions may go) */
+function requiredPcs(c){
+  const iv=[...new Set(c.iv)], m=new Set(iv.map(i=>i%12)), req=new Set([0]);
+  const third=iv.find(i=>i===3||i===4)??iv.find(i=>i===2||i===5); if(third!=null) req.add(third%12);
+  const sev=iv.find(i=>i===10||i===11)??(c.fam==='dim'&&m.has(9)?9:null); if(sev!=null) req.add(sev);
+  if(m.has(6)&&!m.has(7)) req.add(6); if(m.has(8)&&!m.has(7)&&c.fam==='aug') req.add(8);
+  if(m.has(9)&&sev==null&&c.fam!=='dim') req.add(9);   // the 6 of a 6 chord
+  const ext=iv.filter(i=>i>12).sort((a,b)=>a-b);
+  ext.forEach(i=>{ if([13,15,18,20].includes(i)) req.add(i%12); });   // ♭9 ♯9 ♯11 ♭13
+  if(ext.length) req.add(ext[ext.length-1]%12);
+  if(req.size<3&&m.has(7)) req.add(7);
+  return new Set([...req].map(i=>(c.root+i)%12));
+}
+const GC=new Map();
+function gtrCandidates(c,open){
+  const key=c.sym+'|'+open.join(','); if(GC.has(key)) return GC.get(key);
+  const all=chordPcs(c), req=requiredPcs(c), bassPc=c.bass!=null?c.bass:c.root, seen=new Map();
+  const cur=[];
+  const evaluate=()=>{
+    const f=cur.slice(), on=[]; f.forEach((x,s)=>{ if(x!=null) on.push(s); });
+    if(on.length<3) return;
+    const pitch=on.map(s=>open[s]+f[s]), low=Math.min(...pitch);
+    if(((low%12)+12)%12!==bassPc) return;
+    const pcs=new Set(pitch.map(p=>((p%12)+12)%12)); for(const r of req) if(!pcs.has(r)) return;
+    let gaps=0; for(let s=on[0];s<=on[on.length-1];s++) if(f[s]==null) gaps++;
+    if(gaps>1) return;
+    const fr=on.filter(s=>f[s]>0), ff=fr.map(s=>f[s]);
+    const minF=ff.length?Math.min(...ff):0, maxF=ff.length?Math.max(...ff):0;
+    if(maxF-minF>3) return;
+    const atMin=fr.filter(s=>f[s]===minF);
+    let barre=false, fingers=ff.length;
+    if(atMin.length>=2){ const a=atMin[0], b=atMin[atMin.length-1]; let ok=true; for(let s=a;s<=b;s++) if(f[s]===0||(f[s]!=null&&f[s]<minF)) ok=false; if(ok){ barre=true; fingers=ff.length-atMin.length+1; } }
+    if(fingers>4) return;
+    const opens=on.filter(s=>f[s]===0).length, missing=[...all].filter(p=>!pcs.has(p)).length;
+    const pos=ff.length?ff.reduce((x,y)=>x+y,0)/ff.length:0, n=on.length;
+    const score=(n<4?(4-n):0)+(6-n)*0.3+on[0]*0.25+gaps*1.5+(maxF-minF)*0.3+minF*0.1+pos*0.15+(barre?0.6:0)+fingers*0.15
+      -opens*0.2+missing*0.25+(opens&&maxF>4?1+0.25*(maxF-4):0)+(f[5]==null?0.3:0)   // open strings belong with low frets
+      +(f[on[0]]>0&&f[on[0]+1]===0?0.6:0);                                         // a fretted bass right under an open string is awkward
+    const k=fretsStr(f), old=seen.get(k); if(!old||old.score>score) seen.set(k,{f,score,pos,minF});
+  };
+  for(let base=1;base<=12;base++){
+    const opts=open.map(o=>{ const r=[null]; if(all.has(((o%12)+12)%12)) r.push(0); for(let fr=base;fr<base+4;fr++) if(all.has(((o+fr)%12+12)%12)) r.push(fr); return r; });
+    const rec=s=>{ if(s===6) return evaluate(); for(const x of opts[s]){ cur[s]=x; rec(s+1); } };
+    rec(0);
+  }
+  const out=[...seen.values()].sort((a,b)=>a.score-b.score).slice(0,12);
+  GC.set(key,out); return out;
+}
+/* every chord occurrence in reading order (a "%" bar repeats the previous bar's chords) */
+function chordOccurrences(s=song){
+  const occ=[]; let fi=0, prev=[];
+  s.sections.forEach(sec=>sec.bars.forEach(txt=>{
+    let toks=splitBar(txt); if(toks.length===1&&toks[0]==='%') toks=prev; else prev=toks;
+    toks.forEach((t,ti)=>{ if(tokKind(t)!=='chord') return; const c=parseChord(t); if(c&&c.ok!==false) occ.push({fi,ti,c}); });
+    fi++;
+  }));
+  return occ;
+}
+/* choose one voicing per occurrence: each voicing's own cost + how far the hand moves from the previous chord (dynamic programming) */
+let GPLAN={sig:'',map:new Map()};
+function gtrPlan(){
+  const g=gtrConf(), occ=chordOccurrences(), sig=JSON.stringify([song.guitar||null,occ.map(o=>o.c.sym)]);
+  if(GPLAN.sig===sig) return GPLAN.map;
+  const cands=occ.map(o=>{ const fx=g.fixed[o.c.sym]&&parseFrets(g.fixed[o.c.sym]);
+    if(fx){ const ff=fx.filter(x=>x>0); return [{f:fx,score:0,pos:ff.length?ff.reduce((a,b)=>a+b,0)/ff.length:0,fixed:true}]; }
+    const cs=gtrCandidates(o.c,g.open); return cs.length?cs:[{f:null,score:0,pos:0}]; });
+  const move=(a,b)=>{ if(!a.f||!b.f) return 0; let ch=0; for(let s=0;s<6;s++) if(a.f[s]!==b.f[s]) ch++; return ch?0.6*Math.abs(a.pos-b.pos)+0.25*ch:0; };
+  const cost=[], from=[];
+  cands.forEach((cs,i)=>{
+    cost[i]=[]; from[i]=[];
+    cs.forEach((v,k)=>{
+      if(!i){ cost[i][k]=v.score; return; }
+      let best=Infinity, bj=0;
+      cands[i-1].forEach((u,j)=>{ const x=cost[i-1][j]+move(u,v); if(x<best){ best=x; bj=j; } });
+      cost[i][k]=best+v.score; from[i][k]=bj;
+    });
+  });
+  const map=new Map();
+  if(occ.length){
+    let k=cost[occ.length-1].indexOf(Math.min(...cost[occ.length-1]));
+    for(let i=occ.length-1;i>=0;i--){ const v=cands[i][k]; if(v.f) map.set(occ[i].fi+':'+occ[i].ti,{f:v.f,fixed:!!v.fixed,c:occ[i].c}); k=from[i][k]; }
+  }
+  GPLAN={sig,map}; return map;
+}
+const gtrNotes=f=>{ const o=gtrConf().open; return f.map((x,s)=>x==null?null:o[s]+x).filter(x=>x!=null); };
+/* horizontal box like a tab: nut on the left, high e on top, roots in red, x = muted string */
+function gtrSVG(f,c,{w=56,h=38}={}){
+  const open=gtrConf().open, ff=f.filter(x=>x>0), maxF=ff.length?Math.max(...ff):1, minF=ff.length?Math.min(...ff):1;
+  const start=maxF<=4?1:minF, n=4, x0=11, y0=4, cw=(w-x0-3)/n, sh=(h-y0-(start>1?10:5))/5;
+  const y=s=>y0+(5-s)*sh, o=[];
+  for(let s=0;s<6;s++) o.push(`<line x1="${x0}" x2="${x0+n*cw}" y1="${y(s)}" y2="${y(s)}" class="gs"/>`);
+  for(let k=0;k<=n;k++) o.push(`<line x1="${x0+k*cw}" x2="${x0+k*cw}" y1="${y(5)}" y2="${y(0)}" class="${k===0&&start===1?'gn':'gf'}"/>`);
+  f.forEach((x,s)=>{
+    const root=x!=null&&(((open[s]+x)%12)+12)%12===c.root;
+    if(x==null) o.push(`<text x="${x0-6}" y="${y(s)+2.6}" class="gx">×</text>`);
+    else if(x===0) o.push(`<circle cx="${x0-5.5}" cy="${y(s)}" r="2.1" class="go${root?' gr':''}"/>`);
+    else if(x-start<n) o.push(`<circle cx="${x0+(x-start+0.5)*cw}" cy="${y(s)}" r="${Math.min(3.2,sh*0.62)}" class="gd${root?' gr':''}"/>`);
+  });
+  if(start>1) o.push(`<text x="${x0+0.5*cw}" y="${h-1}" class="gp">${start}fr</text>`);
+  return `<svg class="gdiag" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" aria-hidden="true">${o.join('')}</svg>`;
+}
 
 /* timeline: bars → chord segments + melody notes (absolute seconds) */
 function buildTimeline(a,b){
@@ -2056,7 +2253,7 @@ function buildTimeline(a,b){
     const n=slots.length;
     slots.forEach((s,i)=>{
       const st=t+dur*i/n, d=dur/n;
-      if(s.c){ last={chord:s.c,start:st,dur:d}; segs.push(last); }
+      if(s.c){ last={chord:s.c,start:st,dur:d,fi,ti:i}; segs.push(last); }
       else if(s.cont){ if(last) last.dur=st+d-last.start; }
       else last=null;
     });
@@ -2068,13 +2265,13 @@ function buildTimeline(a,b){
   return {bars,segs,mel:melEv,total:t};
 }
 function buildEvents(tl,inst,pattern){
-  const kind=INSTRUMENTS[inst].kind, ev=[], vs={center:64}, grid=[];
+  const kind=INSTRUMENTS[inst].kind, ev=[], vs={center:64}, grid=[], GP=kind==='guitar'?gtrPlan():new Map();
   if(pattern!=='hold') tl.bars.forEach(b=>{
     const per=pattern==='beat'?1:b.sub, step=b.beatDur/per, n=Math.round(b.dur/step);
     for(let k=0;k<n;k++) grid.push({t:b.start+k*step,off:k%per!==0,down:k===0});
   });
   tl.segs.forEach(sg=>{
-    const notes=kind==='piano'?pianoVoicing(sg.chord,vs):guitarVoicing(sg.chord,inst), end=sg.start+sg.dur;
+    const gv=kind==='guitar'&&GP.get(sg.fi+':'+sg.ti), notes=kind==='piano'?pianoVoicing(sg.chord,vs):gv?gtrNotes(gv.f):guitarVoicing(sg.chord,inst), end=sg.start+sg.dur;
     const atk=[{t:sg.start,off:false,first:true}];
     grid.forEach(g=>{ if(g.t>sg.start+1e-4&&g.t<end-1e-4) atk.push(g); });
     atk.forEach((a,i)=>{
@@ -2760,10 +2957,50 @@ function renderAnalysis(){
 }
 let annTimer=0;
 const queueAnalysis=()=>{
-  if(!prefs.annot&&!prefs.showRoman) return;
+  if(!prefs.annot&&!prefs.showRoman&&!prefs.gtr) return;
   clearTimeout(annTimer);
-  annTimer=setTimeout(()=>{ ANN=analyzeSong(song); hideAnnPop(); $$('.bar').forEach(c=>fillRns(c)); renderAnalysis(); },400);
+  annTimer=setTimeout(()=>{
+    if(prefs.annot||prefs.showRoman){ ANN=analyzeSong(song); hideAnnPop(); }
+    const k=!$('#gtrPop').hidden&&$('#gtrPop').dataset.k;
+    $$('.bar').forEach(c=>{ fillRns(c); fillDgms(c); });
+    if(k){ const [fi,ti]=k.split(':'), b=$(`.bar[data-fi="${fi}"] button.dgm[data-ti="${ti}"]`); b?b.classList.add('on'):hideGtrPop(); }   // keep an open picker   // a changed chord can change its neighbours' best voicings too
+    renderAnalysis();
+  },400);
 };
+/* ---------- voicing picker ---------- */
+function hideGtrPop(){ const p=$('#gtrPop'); if(p&&!p.hidden){ p.hidden=true; $$('.dgm.on').forEach(x=>x.classList.remove('on')); } }
+async function auditionFrets(f){
+  const inst=INSTRUMENTS[prefs.inst].kind==='guitar'?prefs.inst:'acoustic', notes=gtrNotes(f);
+  Engine.init(); try{ await Engine.ctx.resume(); }catch(e){}
+  await Engine.prepare(inst,notes);
+  Engine.chord(inst,notes,Engine.ctx.currentTime+0.02,{d:1.8,vel:0.85,dir:'down'});
+}
+function showGtrPop(btn){
+  const p=$('#gtrPop'), fi=+btn.closest('.bar').dataset.fi, ti=+btn.dataset.ti, v=gtrPlan().get(fi+':'+ti);
+  if(!v) return;
+  if(!p.hidden&&p.dataset.k===fi+':'+ti){ hideGtrPop(); return; }
+  hideGtrPop();
+  const c=v.c, g=gtrConf(), cands=gtrCandidates(c,g.open).slice(0,8), cur=fretsStr(v.f);
+  if(!cands.some(x=>fretsStr(x.f)===cur)) cands.unshift({f:v.f});
+  p.dataset.k=fi+':'+ti; p.dataset.sym=c.sym;
+  p.innerHTML=`<div class="ap-h"><b class="gp-sym">${chordHTML(c.sym)}</b> 운지 고르기<button type="button" class="gp-x ap-x" title="닫기">✕</button></div>
+    <div class="gp-grid">${cands.map(x=>{ const k=fretsStr(x.f); return `<button type="button" class="gp-c${k===cur?' on':''}" data-f="${esc(k)}" title="${esc(k)}">${gtrSVG(x.f,c,{w:64,h:44})}<span>${esc(k)}</span></button>`; }).join('')}</div>
+    <div class="gp-own"><input class="field" name="gtrFrets" placeholder="직접: x02210" value="${v.fixed?esc(cur):''}" spellcheck="false" autocomplete="off" aria-label="운지 직접 입력 (6줄, 낮은 줄부터)"><button type="button" class="btn sm" data-g="set">적용</button><button type="button" class="btn sm" data-g="auto"${v.fixed?'':' disabled'} title="앞뒤 코드와 손 이동이 적은 운지를 자동으로">자동</button></div>
+    <p class="gp-note">누르면 소리로 들어 봐요 · ${editMode?`고른 운지는 이 곡의 모든 <b>${esc(c.sym)}</b>에 적용돼요`:'✎ 수정 모드에서 고르면 이 곡의 운지로 정해져요'}</p>`;
+  p.hidden=false; btn.classList.add('on');
+  const r=btn.getBoundingClientRect(), w=p.offsetWidth, h=p.offsetHeight, vw=document.documentElement.clientWidth;
+  const left=Math.max(8,Math.min(r.left+r.width/2-w/2,vw-w-8));
+  const kb=parseFloat(getComputedStyle(document.body).getPropertyValue('--kb-h'))||0, tb=Math.max(0,$('.toolbar').getBoundingClientRect().bottom);
+  const below=r.bottom+8+h<=innerHeight-kb||r.top-8-h<tb;
+  p.style.left=(left+scrollX)+'px'; p.style.top=((below?r.bottom+8:r.top-8-h)+scrollY)+'px';
+}
+function setVoicing(sym,frets){
+  if(!needEdit()) return;
+  const g=song.guitar=cleanGuitar(song.guitar)||{tuning:'',capo:0,voicings:{}};
+  if(frets) g.voicings[sym]=frets; else delete g.voicings[sym];
+  song.guitar=cleanGuitar(g);
+  markDirty(); hideGtrPop(); $$('.bar').forEach(c=>fillDgms(c));
+}
 /* a comment: the most plausible reading first, then the other readings that also fit (best first) */
 function annBody(n){
   const alts=n.alts||[];
@@ -3031,7 +3268,11 @@ function renderChordBox(){
   $('#cbList').innerHTML=diatonicChords().map(sym=>{ const c=parseChord(sym); return `<span class="cbc">${chordHTML(sym)}${key?`<span class="rn">${esc(roman(c,key))}</span>`:''}</span>`; }).join('');
   $('#cbMore').textContent=`${key?keyName(song.key):'C major'} 다이어토닉 · 전체 ${12*CHORD_TYPES.length}개 ›`;
 }
-function chordVoicing(c,inst){ return INSTRUMENTS[inst].kind==='guitar'?guitarVoicing(c,inst):pianoVoicing(c,{center:64}); }
+function chordVoicing(c,inst){
+  if(INSTRUMENTS[inst].kind!=='guitar') return pianoVoicing(c,{center:64});
+  const v=gtrCandidates(c,gtrConf().open)[0];
+  return v?gtrNotes(v.f):guitarVoicing(c,inst);
+}
 async function auditionChord(c){
   const inst=prefs.inst, notes=chordVoicing(c,inst);
   Engine.init(); try{ await Engine.ctx.resume(); }catch(e){}
@@ -3538,6 +3779,10 @@ function bind(){
   // analysis comments panel
   const setAnnot=on=>{ prefs.annot=on; if(on&&!prefs.showRoman) prefs.showRoman=true; savePrefs(); renderHeader(); renderSections(); };
   $('#showAnn').addEventListener('change',e=>setAnnot(e.target.checked));
+  $('#showGtr').addEventListener('change',e=>{ prefs.gtr=e.target.checked; savePrefs(); renderGtrOpts(); renderSections(); });
+  $('#gtrTuning').addEventListener('change',e=>{ const v=e.target.value; if(v==='custom'){ $('#gtrTuningTxt').hidden=false; $('#gtrTuningTxt').focus(); return; } setGtr({tuning:normTuning(v)===GTR_STD.join()?'':v}); });
+  $('#gtrTuningTxt').addEventListener('change',e=>{ const v=e.target.value.trim(); if(v&&tuningMidi(v).join()===GTR_STD.join()&&!/^E\s+A\s+D\s+G\s+B\s+E$/i.test(v)) return toast('튜닝은 낮은 줄부터 6개 음으로 적어요 (예: E A D G B D#)'); setGtr({tuning:v}); });
+  $('#gtrCapo').addEventListener('change',e=>setGtr({capo:+e.target.value}));
   $('#anClose').onclick=()=>setAnnot(false);
   $('#anFilter').addEventListener('click',e=>{ const b=e.target.closest('[data-f]'); if(b){ annFilter=b.dataset.f; renderAnalysis(); } });
   $('#anPanel').addEventListener('click',e=>{
@@ -3662,6 +3907,7 @@ function bind(){
   });
   secs.addEventListener('click',e=>{
     const ref=e.target.closest('.rn-ref'); if(ref){ e.stopPropagation(); showAnnPop(ref); return; }
+    const dg=e.target.closest('button.dgm'); if(dg){ e.stopPropagation(); showGtrPop(dg); return; }
     const b=e.target.closest('button[data-act]'); if(!b) return;
     secAction(b.dataset.act,+b.closest('.sec').dataset.si);
   });
@@ -3669,7 +3915,7 @@ function bind(){
   // bars: staff (melody) or chord area (drag-select, edit, context menu)
   secs.addEventListener('mousedown',e=>{
     if(e.button!==0) return;
-    if(e.target.closest('.rn-ref')) return;   // footnote number → popup (click handler)
+    if(e.target.closest('.rn-ref,.dgm')) return;   // footnote number / guitar diagram → popup (click handler)
     const svg=e.target.closest('svg.staff');
     if(svg) return staffMouseDown(e,svg);
     const cell=e.target.closest('.bar'); if(!cell) return;
@@ -3694,7 +3940,7 @@ function bind(){
     dragging=false;
     if(noteDrag){ const {fi,i,pushed}=noteDrag; noteDrag=null; if(pushed) previewNote(notesOf(fi)[i]); }
   });
-  secs.addEventListener('dblclick',e=>{ if(e.target.closest('svg.staff,.rn-ref')) return; const cell=e.target.closest('.bar'); if(cell&&!e.target.classList.contains('bar-edit')) startEdit(+cell.dataset.fi); });
+  secs.addEventListener('dblclick',e=>{ if(e.target.closest('svg.staff,.rn-ref,.dgm')) return; const cell=e.target.closest('.bar'); if(cell&&!e.target.classList.contains('bar-edit')) startEdit(+cell.dataset.fi); });
   secs.addEventListener('contextmenu',e=>{
     const cell=e.target.closest('.bar'); if(!cell||e.target.classList.contains('bar-edit')) return;
     e.preventDefault(); commitEdit(); exitMel();
@@ -3706,9 +3952,20 @@ function bind(){
   document.addEventListener('mousedown',e=>{ if(!e.target.closest('#ctx')) hideCtx(); },true);
   // footnote popup: closes on its ✕, outside click, Esc, resize
   $('#annPop').addEventListener('click',e=>{ if(e.target.closest('.ap-x')) hideAnnPop(); });
-  document.addEventListener('mousedown',e=>{ if(!e.target.closest('#annPop,.rn-ref')) hideAnnPop(); },true);
-  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('#annPop').hidden){ e.stopPropagation(); hideAnnPop(); } },true);
-  addEventListener('resize',hideAnnPop);
+  document.addEventListener('mousedown',e=>{ if(!e.target.closest('#annPop,.rn-ref')) hideAnnPop(); if(!e.target.closest('#gtrPop,.dgm')) hideGtrPop(); },true);
+  $('#gtrPop').addEventListener('click',e=>{
+    const p=$('#gtrPop'), sym=p.dataset.sym;
+    if(e.target.closest('.ap-x')) return hideGtrPop();
+    const c=e.target.closest('.gp-c');
+    if(c){ const f=parseFrets(c.dataset.f); auditionFrets(f); $$('.gp-c',p).forEach(x=>x.classList.toggle('on',x===c)); if(editMode) setVoicing(sym,c.dataset.f); return; }
+    const b=e.target.closest('[data-g]'); if(!b) return;
+    if(b.dataset.g==='auto') return setVoicing(sym,null);
+    const v=$('input',p).value.trim(), f=parseFrets(v);
+    if(!f) return toast('6줄을 낮은 줄부터 적어요 — 예: x02210, 프렛 10 이상은 x,10,12,12,11,x');
+    auditionFrets(f); setVoicing(sym,fretsStr(f));
+  });
+  document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('#annPop').hidden){ e.stopPropagation(); hideAnnPop(); } if(e.key==='Escape'&&!$('#gtrPop').hidden){ e.stopPropagation(); hideGtrPop(); } },true);
+  addEventListener('resize',()=>{ hideAnnPop(); hideGtrPop(); });
   addEventListener('scroll',hideCtx,{passive:true});
   let rz=0;
   addEventListener('resize',()=>{ hideCtx(); clearTimeout(rz); rz=setTimeout(()=>{ if(prefs.staff) $$('.bar').forEach(drawStaff); },120); });
