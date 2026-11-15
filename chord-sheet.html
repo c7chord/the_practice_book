@@ -2125,6 +2125,8 @@ function requiredPcs(c){
   const ext=iv.filter(i=>i>12).sort((a,b)=>a-b);
   ext.forEach(i=>{ if([13,15,18,20].includes(i)) req.add(i%12); });   // ♭9 ♯9 ♯11 ♭13
   if(ext.length) req.add(ext[ext.length-1]%12);
+  // extensions written in the name are required too (maj9#11 needs its 9; a plain 13 chord may drop the 9 and 11)
+  ((c.qual||'').replace(/[#b](9|11|13)/g,'').match(/9|11|13/g)||[]).forEach(d=>{ const i={9:14,11:17,13:21}[d]; if(iv.includes(i)) req.add(i%12); });
   if(req.size<3&&m.has(7)) req.add(7);
   return new Set([...req].map(i=>(c.root+i)%12));
 }
